@@ -45,7 +45,7 @@ npm run ingest -- --recheck-only     # only re-check open issues not seen in 24h
 - `src/routes/auth.ts`: `GET /api/auth/github` sets a `gim_oauth_state` cookie and redirects to GitHub. `GET /api/auth/github/callback` checks state, exchanges the code, upserts the user by `github_id`, sets the session, and redirects to `${CLIENT_URL}/dashboard` (or `/?authError=denied|state|failed|unavailable`). `POST /api/auth/logout`.
 - `src/routes/me.ts` (session required, else 401): `GET /api/me` → `{user, savedIssueIds}`, `PUT /api/me/profile`, `GET /api/me/saved` (open saved issues scored with the user's profile, plus a `hiddenClosed` count), `PUT|DELETE /api/me/saved/:issueId` (idempotent; PUT returns 404 if the issue isn't open).
 - `GET /api/meta` → `{languages, labels, auth: {github}}`: the client builds its filter options from this, so `src/ingest/queries.ts` stays the single source.
-- `src/routes/issues.ts`: `GET /api/issues`. SQL applies the filters (open + unassigned + `language`/`label`/`difficulty`), takes the `MAX_CANDIDATES` (5000) most recently updated rows, ranks them in JS, then paginates.
+- `src/routes/issues.ts`: `GET /api/issues`. SQL applies the filters (open + unassigned + `language`/`label`/`difficulty`), takes the `MAX_CANDIDATES` (5000) most recently updated rows, ranks them in JS, applies `diversifyByRepo` (`src/domain/diversity.ts`: at most `MAX_PER_REPO_PER_PAGE` = 2 per repo per page; extras move to later pages, never dropped; computed over the whole list for the requested `pageSize` so page boundaries are stable), then paginates.
 
 ### `GET /api/issues` query params
 

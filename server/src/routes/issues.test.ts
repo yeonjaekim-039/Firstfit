@@ -68,6 +68,29 @@ describe('GET /api/issues', () => {
     expect(res.body.items[0].id).toBe(41);
   });
 
+  it('shows at most 2 issues per repo on a page, pushing extras to later pages', async () => {
+    // Five top-ranked issues from one repo (freshest), then one issue each from four other repos.
+    const day = 86_400_000;
+    const rows = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        makeIssue({ id: i + 1, repoFullName: 'big/repo', updatedAt: new Date(NOW.getTime() - i * 1000) }),
+      ),
+      ...['a', 'b', 'c', 'd'].map((r, i) =>
+        makeIssue({ id: 10 + i, repoFullName: `${r}/repo`, updatedAt: new Date(NOW.getTime() - (i + 1) * day) }),
+      ),
+    ];
+    const { app } = setup(rows);
+    const page1 = await request(app).get('/api/issues').query({ pageSize: 4 });
+    const page2 = await request(app).get('/api/issues').query({ pageSize: 4, page: 2 });
+    const page3 = await request(app).get('/api/issues').query({ pageSize: 4, page: 3 });
+    const ids = (r: typeof page1) => r.body.items.map((i: { id: number }) => i.id);
+
+    expect(ids(page1)).toEqual([1, 2, 10, 11]);
+    expect(ids(page2)).toEqual([3, 4, 12, 13]);
+    expect(ids(page3)).toEqual([5]);
+    expect(page1.body.totalPages).toBe(3);
+  });
+
   it('returns an empty page past the end', async () => {
     const { app } = setup([makeIssue()]);
     const res = await request(app).get('/api/issues').query({ page: 5 });

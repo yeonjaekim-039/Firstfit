@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { IssueStore, UserStore } from '../db/stores.js';
+import { diversifyByRepo } from '../domain/diversity.js';
 import { rankIssues, type UserProfile } from '../domain/scoring.js';
 import { DIFFICULTIES } from '../domain/types.js';
 import { toIssueDto } from './dto.js';
@@ -67,7 +68,8 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
       { languages: q.language, labels: q.label, difficulties: q.difficulty },
       MAX_CANDIDATES,
     );
-    const ranked = rankIssues(rows, profile, now());
+    // Diversify over the whole ranked list (not just this page) so page boundaries stay stable.
+    const ranked = diversifyByRepo(rankIssues(rows, profile, now()), (s) => s.issue.repoFullName, q.pageSize);
     const start = (q.page - 1) * q.pageSize;
 
     res.json({
