@@ -8,7 +8,7 @@ languages, and difficulty level.
 - `server/`: Node + Express 5 + TypeScript API (ESM, `NodeNext`). ESLint + Vitest.
 - `client/`: Vite + React + TypeScript. Linted with oxlint (Vite template default), tested with Vitest + Testing Library (jsdom). Dev server proxies `/api` to `localhost:3001`.
 - `docker-compose.yml`: Postgres 16 on **host port 5433** (5432 is taken by another local project, so don't change it back).
-- `.env` (repo root, git-ignored): read by docker-compose and by `server/src/config.ts`. See `.env.example`. Needs `DATABASE_URL` and `GITHUB_TOKEN`.
+- `.env` (repo root, git-ignored): read by docker-compose and by `server/src/config.ts`. See `.env.example`. Needs `DATABASE_URL` and `GITHUB_TOKEN`; `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`/`SESSION_SECRET`/`CLIENT_URL` enable login (without them the app works signed-out only).
 - `.github/workflows/ci.yml`: on every push/PR, runs `npm ci`, `lint`, `typecheck`, `test` for `server` and `client` (matrix). CI has no Postgres; tests must not need a DB.
 
 ## Commands
@@ -40,7 +40,11 @@ npm run ingest -- --recheck-only     # only re-check open issues not seen in 24h
   - `difficulty.ts`: easy/medium/hard heuristic from labels, comment count, and body length.
   - `mapIssue.ts`: maps a search item to rows. Labels are lowercased and de-duplicated. `language` is the *queried* language, because search results don't include repo language.
   - `upsert.ts`: multi-row `INSERT ... ON CONFLICT` per page in one transaction (rows are de-duplicated first).
-- `src/db/stores.ts`: `IssueStore` / `UserStore` interfaces plus pg implementations. `createApp(deps)` takes stores via injection; route tests use fakes in `src/test/fakes.ts`.
+- `src/db/stores.ts`: `IssueStore` / `UserStore` / `SavedStore` interfaces plus pg implementations. `createApp(deps)` takes stores, the session codec, and the OAuth client via injection; route tests build deps with `makeDeps()` from `src/test/fakes.ts` (in-memory stores, fake OAuth).
+- `src/auth/`: `session.ts` is a stateless HMAC-signed cookie (`gim_session`, 30 days, httpOnly, SameSite=Lax; nothing is stored server-side). `githubOAuth.ts` is the GitHub web flow (no scopes: public profile only).
+- `src/routes/auth.ts`: `GET /api/auth/github` sets a `gim_oauth_state` cookie and redirects to GitHub. `GET /api/auth/github/callback` checks state, exchanges the code, upserts the user by `github_id`, sets the session, and redirects to `${CLIENT_URL}/dashboard` (or `/?authError=denied|state|failed|unavailable`). `POST /api/auth/logout`.
+- `src/routes/me.ts` (session required, else 401): `GET /api/me` → `{user, savedIssueIds}`, `PUT /api/me/profile`, `GET /api/me/saved` (open saved issues scored with the user's profile, plus a `hiddenClosed` count), `PUT|DELETE /api/me/saved/:issueId` (idempotent; PUT returns 404 if the issue isn't open).
+- `GET /api/meta` → `{languages, labels, auth: {github}}`: the client builds its filter options from this, so `src/ingest/queries.ts` stays the single source.
 - `src/routes/issues.ts`: `GET /api/issues`. SQL applies the filters (open + unassigned + `language`/`label`/`difficulty`), takes the `MAX_CANDIDATES` (5000) most recently updated rows, ranks them in JS, then paginates.
 
 ### `GET /api/issues` query params
@@ -56,10 +60,20 @@ List params accept `a,b` or repeated keys.
 
 The response contains `total` (rows matching the filters), `rankedCount` (rows actually ranked, ≤ 5000), `totalPages`, the effective `profile`, and `items[]` with `score` and `breakdown`.
 
+## Client architecture
+
+- `src/api.ts`: types and fetch wrappers for every endpoint. `src/session.tsx` is a `SessionProvider` (meta, current user, saved ids, optimistic `toggleSave`); read it with `useSession()` from `src/sessionContext.ts`.
+- Routes (react-router v8): `/` = `pages/DiscoverPage.tsx`, `/dashboard` = `pages/DashboardPage.tsx`.
+- Discover state lives in the **URL** (`skills`, `langs`, `level`, `language`, `label`, `difficulty`, `page`; see `pages/discoverQuery.ts`), so searches are shareable and back/forward works. Signed-in users with no profile params in the URL get the form seeded from their saved profile.
+- Components: `ChipInput` (free-text tags), `ToggleChips` (multi-select filters), `DifficultyPicker`, `IssueCard` (links, labels, score breakdown, save), `Pagination`, `Layout`. Plain CSS in `src/index.css` with light/dark tokens; breakpoints at 900px (single column) and 600px (card score moves below).
+- Login is a plain link to `/api/auth/github` through the Vite proxy, so the session cookie is first-party on `:5173`. The GitHub OAuth App's callback URL must be `http://localhost:5173/api/auth/github/callback`.
+- Tests mock `fetch` with `src/test/mockApi.ts`. Vitest globals are off, so `src/test/setup.ts` registers Testing Library's `cleanup` explicitly.
+- oxlint's `only-export-components` rule: keep non-component exports (hooks, helpers) out of `.tsx` component files.
+
 ## Database
 
 The schema is in `server/migrations/` (plain SQL, applied in filename order and tracked in `schema_migrations`). Add new migrations as `NNN_description.sql`; never edit an applied one.
-Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN index, `difficulty` enum), `users`, `saved_issues`.
+Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN index, `difficulty` enum, `state` ∈ open/closed/delisted), `users` (`github_id` unique, used as the OAuth upsert key), `saved_issues`.
 
 ## Conventions and gotchas
 

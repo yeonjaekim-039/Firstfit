@@ -9,4 +9,8 @@ export const config = {
   databaseUrl:
     process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5433/github_issue_matcher',
   githubToken: process.env.GITHUB_TOKEN,
+  githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
+  sessionSecret: process.env.SESSION_SECRET || undefined,
+  clientUrl: (process.env.CLIENT_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
 };

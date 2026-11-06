@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { IssueStore, UserStore } from '../db/stores.js';
 import { rankIssues, type UserProfile } from '../domain/scoring.js';
 import { DIFFICULTIES } from '../domain/types.js';
+import { toIssueDto } from './dto.js';
 
 /** How many filtered issues (most recently updated first) are pulled from the DB and ranked. */
 export const MAX_CANDIDATES = 5000;
@@ -76,21 +77,9 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
       rankedCount: ranked.length,
       totalPages: Math.ceil(ranked.length / q.pageSize),
       profile,
-      items: ranked.slice(start, start + q.pageSize).map(({ issue, score, breakdown }) => ({
-        id: issue.id,
-        number: issue.number,
-        title: issue.title,
-        url: issue.url,
-        labels: issue.labels,
-        language: issue.language,
-        difficulty: issue.difficulty,
-        commentCount: issue.commentCount,
-        createdAt: issue.createdAt,
-        updatedAt: issue.updatedAt,
-        repo: { fullName: issue.repoFullName, url: issue.repoUrl },
-        score,
-        breakdown,
-      })),
+      items: ranked
+        .slice(start, start + q.pageSize)
+        .map(({ issue, score, breakdown }) => toIssueDto(issue, score, breakdown)),
     });
   });
 

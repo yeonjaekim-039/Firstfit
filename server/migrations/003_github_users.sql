@@ -1,0 +1,3 @@
+ALTER TABLE users
+  ADD COLUMN github_id  BIGINT UNIQUE,
+  ADD COLUMN avatar_url TEXT;

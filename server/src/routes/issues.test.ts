@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app.js';
 import type { IssueRecord, IssueStore } from '../db/stores.js';
 import type { UserProfile } from '../domain/scoring.js';
-import { fakeIssueStore, fakeUserStore, makeIssue, NOW } from '../test/fakes.js';
+import { fakeIssueStore, fakeUserStore, makeDeps, makeIssue, NOW } from '../test/fakes.js';
 import { MAX_CANDIDATES } from './issues.js';
 
 function setup(rows: IssueRecord[] = [], users: Record<number, UserProfile> = {}) {
   const { store, calls } = fakeIssueStore(rows);
-  const app = createApp({ issueStore: store, userStore: fakeUserStore(users), now: () => NOW });
+  const app = createApp(makeDeps({ issueStore: store, userStore: fakeUserStore(users) }));
   return { app, calls };
 }
 
@@ -127,7 +127,7 @@ describe('GET /api/issues', () => {
   it('returns 500 when the store fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const failing: IssueStore = { findCandidates: async () => Promise.reject(new Error('db down')) };
-    const app = createApp({ issueStore: failing, userStore: fakeUserStore() });
+    const app = createApp(makeDeps({ issueStore: failing }));
     const res = await request(app).get('/api/issues');
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: 'Internal server error' });

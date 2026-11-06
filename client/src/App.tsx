@@ -1,9 +1,20 @@
+import { Route, Routes } from 'react-router'
+import { Layout } from './components/Layout'
+import { DashboardPage } from './pages/DashboardPage'
+import { DiscoverPage } from './pages/DiscoverPage'
+import { SessionProvider } from './session'
+
 function App() {
   return (
-    <main>
-      <h1>GitHub Issue Matcher</h1>
-      <p>Find beginner-friendly open-source issues ranked by your skills.</p>
-    </main>
+    <SessionProvider>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<DiscoverPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="*" element={<p className="muted page-pad">Page not found.</p>} />
+        </Routes>
+      </Layout>
+    </SessionProvider>
   )
 }
 
