@@ -1,0 +1,84 @@
+# Production stack for issuematcher.duckdns.org. Lives at /opt/issuematcher on the server.
+#
+#   docker compose --env-file .env --env-file image.env -f docker-compose.prod.yml up -d
+#
+# .env holds secrets (created by hand on the server, never committed).
+# image.env holds IMAGE_TAG (written by deploy.sh) so the timer's ingest uses the deployed image.
+#
+# Isolation from other projects on this host: the project name prefixes every container,
+# volume and network with "issuematcher_"; Postgres publishes no ports; only Caddy binds 80/443.
+
+name: issuematcher
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 768m
+    logging: *logging
+
+  server:
+    image: ghcr.io/yeonjaekim-039/issuematcher-server:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?set GITHUB_TOKEN in .env}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID in .env}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      CLIENT_URL: ${CLIENT_URL:?set CLIENT_URL in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    # internal: reach Postgres. egress: outbound HTTPS to GitHub (OAuth + ingest), reachable by Caddy.
+    networks: [internal, egress]
+    mem_limit: 512m
+    logging: *logging
+
+  web:
+    image: ghcr.io/yeonjaekim-039/issuematcher-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-issuematcher.duckdns.org}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data # certificates: keep this volume or Let's Encrypt rate limits may bite
+      - caddy_config:/config
+    depends_on:
+      - server
+    networks: [egress]
+    mem_limit: 128m
+    logging: *logging
+
+networks:
+  internal:
+    internal: true # no route to the outside world or the host
+  egress: {}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -81,6 +81,15 @@ The response contains `total` (rows matching the filters), `rankedCount` (rows a
 The schema is in `server/migrations/` (plain SQL, applied in filename order and tracked in `schema_migrations`). Add new migrations as `NNN_description.sql`; never edit an applied one.
 Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN index, `difficulty` enum, `state` ∈ open/closed/delisted), `repos` metadata (`stars`, `pushed_at`, `archived`, `metadata_fetched_at`), `users` (`github_id` unique, used as the OAuth upsert key), `saved_issues`.
 
+## Production
+
+- **Live:** https://issuematcher.duckdns.org on a Hetzner VPS (`root@46.62.238.195`), at `/opt/issuematcher`. The host also runs **SpartanRoute** (`/root/spartanroute`; containers `spartanroute-*`, volume `spartanroute_pgdata`, ports `127.0.0.1:5432` and `:8080`). Never touch it. Prune only with `--filter label=app=issuematcher`.
+- **Images:** `ghcr.io/yeonjaekim-039/issuematcher-server` (`server/Dockerfile`; runs migrations, then the API) and `ghcr.io/yeonjaekim-039/issuematcher-web` (`deploy/web.Dockerfile`; Caddy plus the built client, config in `deploy/Caddyfile`). Both are built in CI on push to `main` and tagged with the commit SHA and `latest`.
+- **Compose:** `deploy/docker-compose.prod.yml`, project `issuematcher`. Postgres sits only on an `internal: true` network with no published port; only `web` binds 80/443. Secrets live in `/opt/issuematcher/.env` on the server only (template: `deploy/.env.production.example`). `image.env` holds the deployed `IMAGE_TAG`.
+- **Deploy:** the CI `deploy` job (needs `vars.DEPLOY_ENABLED == 'true'` and the secrets `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`) scps `deploy/*` and runs `deploy/deploy.sh <sha>`: pull, `up -d`, wait for health, roll back to the previous tag on failure.
+- **Daily ingest:** `deploy/issuematcher-ingest.{service,timer}` in `/etc/systemd/system` (09:00 UTC, `flock` against overlap) runs `docker compose run --rm server node dist/ingest/run.js`. Deploys upload new unit files to `/opt/issuematcher` but don't install them; copy them and `systemctl daemon-reload` by hand.
+- **Ops:** `cd /opt/issuematcher && docker compose --env-file .env --env-file image.env -f docker-compose.prod.yml logs -f server`; `journalctl -u issuematcher-ingest`.
+
 ## Conventions and gotchas
 
 - Server imports use the `.js` extension (NodeNext ESM).

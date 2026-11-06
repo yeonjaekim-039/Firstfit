@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Issue Matcher ingest daily
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 UTC
+RandomizedDelaySec=15min
+# If the server was off at 09:00, run once when it comes back.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

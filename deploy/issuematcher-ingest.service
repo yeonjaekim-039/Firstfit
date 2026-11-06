@@ -1,0 +1,16 @@
+[Unit]
+Description=Issue Matcher daily ingest (crawl, repo metadata refresh, closed-issue sweep)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/issuematcher
+# flock -n: skip (exit 1, logged) if the previous run is still going rather than stacking runs.
+ExecStart=/usr/bin/flock -n /run/issuematcher-ingest.lock \
+  /usr/bin/docker compose --env-file .env --env-file image.env -f docker-compose.prod.yml \
+  run --rm --no-deps server node dist/ingest/run.js
+# A full crawl is rate-limited to 30 search requests/min and can take several hours.
+TimeoutStartSec=12h
+Nice=10

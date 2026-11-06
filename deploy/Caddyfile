@@ -1,0 +1,28 @@
+# SITE_ADDRESS is the public hostname in production (automatic HTTPS via Let's Encrypt).
+# Set it to e.g. ":80" for a local plain-HTTP smoke test.
+{$SITE_ADDRESS:issuematcher.duckdns.org} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy server:3001
+	}
+
+	handle {
+		root * /srv
+		# Hashed build assets never change; everything else (index.html) must revalidate.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header ?Cache-Control "no-cache"
+		# SPA routing: unknown paths (e.g. /dashboard) fall back to index.html.
+		try_files {path} /index.html
+		file_server
+	}
+}

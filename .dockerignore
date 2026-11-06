@@ -1,0 +1,9 @@
+# Context for deploy/web.Dockerfile (repo root). Only client/ and deploy/Caddyfile are needed.
+**/node_modules
+**/dist
+.git
+.github
+.env
+.env.*
+server
+*.log
