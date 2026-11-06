@@ -99,20 +99,14 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-      - name: Upload deploy files
-        env:
-          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
-        run: |
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
-            deploy/docker-compose.prod.yml deploy/deploy.sh deploy/.env.production.example \
-            deploy/issuematcher-ingest.service deploy/issuematcher-ingest.timer \
-            "$TARGET:/opt/issuematcher/"
+      # The deploy key is pinned to a forced command (deploy/deploy-gate.sh on the server)
+      # that only accepts `deploy <sha>` and fetches the deploy files for that commit itself.
       - name: Deploy
         env:
           TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$TARGET" \
-            "chmod +x /opt/issuematcher/deploy.sh && /opt/issuematcher/deploy.sh ${{ github.sha }}"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "$TARGET" \
+            "deploy ${{ github.sha }}"
       - name: Check the public site
         run: |
           for i in $(seq 1 20); do
