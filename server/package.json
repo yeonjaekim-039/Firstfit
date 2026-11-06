@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "ingest": "tsx src/ingest/run.ts"
   },
   "dependencies": {
     "dotenv": "^18.0.9",
