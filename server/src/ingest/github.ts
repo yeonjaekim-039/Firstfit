@@ -18,6 +18,11 @@ export interface GitHubSearchIssue {
   pull_request?: unknown;
 }
 
+/** Shape of GET /repos/{owner}/{repo}/issues/{number}: the fields we use match search items. */
+export type GitHubIssue = GitHubSearchIssue;
+
+const GONE_STATUSES = new Set([404, 410, 451]);
+
 export interface SearchPage {
   totalCount: number;
   incomplete: boolean;
@@ -30,7 +35,10 @@ export interface GitHubClientOptions {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   log?: (msg: string) => void;
-  /** Minimum gap between requests. Search allows 30 req/min with a token, 10 without. */
+  /**
+   * Minimum gap between requests. Defaults suit the search API (30 req/min with a token, 10 without);
+   * use a separate client with a smaller gap for core endpoints such as getIssue.
+   */
   minIntervalMs?: number;
   maxRetries?: number;
 }
@@ -74,7 +82,17 @@ export class GitHubClient {
     return { totalCount: body.total_count, incomplete: body.incomplete_results, items: body.items };
   }
 
-  private async request(url: string): Promise<unknown> {
+  /**
+   * Fetches a single issue from the core REST API (5000 req/hr with a token).
+   * Returns null when it is gone: deleted (410), not found or repo removed or private (404),
+   * or blocked (451). Transferred issues redirect, so the result can belong to a different repo.
+   */
+  async getIssue(owner: string, repo: string, number: number): Promise<GitHubIssue | null> {
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}`;
+    return (await this.request(url, { goneOk: true })) as GitHubIssue | null;
+  }
+
+  private async request(url: string, opts: { goneOk?: boolean } = {}): Promise<unknown> {
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -99,6 +117,8 @@ export class GitHubClient {
         }
         return res.json();
       }
+
+      if (opts.goneOk && GONE_STATUSES.has(res.status)) return null;
 
       const retryable = res.status === 403 || res.status === 429 || res.status >= 500;
       if (!retryable || attempt >= this.maxRetries) {

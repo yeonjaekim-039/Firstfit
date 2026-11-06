@@ -23,6 +23,7 @@ npm test            # vitest run
 npm run migrate     # server: apply server/migrations/*.sql
 npm run ingest      # server: pull issues from GitHub into Postgres
 npm run ingest -- --languages=Go,Rust --labels="good first issue" --max-issues=500
+npm run ingest -- --recheck-only     # only re-check open issues not seen in 24h
 ```
 
 ## Server architecture
@@ -64,5 +65,5 @@ Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN inde
 
 - Server imports use the `.js` extension (NodeNext ESM).
 - Keep scoring and difficulty logic pure and unit-tested. Change weights in `WEIGHTS` and update tests.
-- Ingestion only marks issues open. Issues closed on GitHub stay `state='open'` until a re-ingest overwrites them (there is no closed-issue sweep yet).
+- **Closed issues:** `issues.ingested_at` = last time search returned the issue. After a full-coverage crawl (all target labels, no `--max-issues`), `src/ingest/sweep.ts` re-fetches each open issue with `ingested_at < run start` via the core API and sets `state` to `closed` (closed / 404 / 410 / 451 / transferred), `delisted` (open but no target label left), or refreshes it. `reconcile()` is pure and unit-tested. It's capped by `--max-rechecks` (default 3000); the rest carry over to the next run. `--recheck-only [--stale-before=ISO]` sweeps without crawling. The API only ever serves `state = 'open'`.
 - If vitest fails with "Cannot find native binding" (rolldown), reinstall: `rm -rf node_modules package-lock.json && npm install` (npm optional-deps bug).

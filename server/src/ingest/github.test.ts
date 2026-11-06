@@ -68,6 +68,21 @@ describe('GitHubClient', () => {
     expect(sleeps).toEqual([11_000]);
   });
 
+  it('getIssue returns null for gone issues and throws for other errors', async () => {
+    for (const status of [404, 410, 451]) {
+      const { client } = makeClient([jsonResponse({ message: 'gone' }, status)]);
+      await expect(client.getIssue('acme', 'widgets', 7)).resolves.toBeNull();
+    }
+    const { client, fetchFn } = makeClient([jsonResponse({ message: 'bad' }, 422)]);
+    await expect(client.getIssue('acme', 'widgets', 7)).rejects.toThrow(/422/);
+    expect(String(fetchFn.mock.calls[0]![0 as never])).toBe('https://api.github.com/repos/acme/widgets/issues/7');
+  });
+
+  it('search still throws on 404', async () => {
+    const { client } = makeClient([jsonResponse({ message: 'nope' }, 404)]);
+    await expect(client.searchIssues('q', 1)).rejects.toThrow(/404/);
+  });
+
   it('throws on non-retryable errors', async () => {
     const { client } = makeClient([jsonResponse({ message: 'bad query' }, 422)]);
     await expect(client.searchIssues('q', 1)).rejects.toThrow(/422/);
