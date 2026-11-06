@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api, DIFFICULTIES, type Difficulty, type IssueQuery, type IssuesPage } from '../api'
 import { ChipInput } from '../components/ChipInput'
@@ -36,6 +36,15 @@ export function DiscoverPage() {
   const data = result?.data ?? lastData
   const error = loading ? null : (result?.error ?? null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const panelId = useId()
+  const activeCount =
+    query.skills.length +
+    query.preferredLanguages.length +
+    (query.level ? 1 : 0) +
+    query.language.length +
+    query.label.length +
+    query.difficulty.length
   const authError = params.get('authError')
 
   const update = (patch: Partial<IssueQuery>) =>
@@ -116,59 +125,81 @@ export function DiscoverPage() {
         </div>
       )}
 
-      <aside className="sidebar card" aria-label="Search options">
-        <h2 className="sidebar-title">About you</h2>
-        <ChipInput
-          label="Skills"
-          value={query.skills}
-          onChange={(skills) => update({ skills })}
-          placeholder="react, css, docs…"
-          suggestions={SKILL_SUGGESTIONS}
-        />
-        <ChipInput
-          label="Preferred languages (in order)"
-          value={query.preferredLanguages}
-          onChange={(preferredLanguages) => update({ preferredLanguages })}
-          placeholder="TypeScript, Python…"
-          suggestions={meta?.languages}
-          max={10}
-        />
-        <DifficultyPicker label="Your level" value={query.level} onChange={(level) => update({ level })} />
-        {profileChanged && (
-          <button type="button" className="btn btn-sm" onClick={saveProfile}>
-            Save as my profile
-          </button>
-        )}
+      <aside className={`sidebar card${panelOpen ? ' is-open' : ''}`} aria-label="Search options">
+        {/* Only shown at narrow widths (see .sidebar-toggle in index.css); desktop always shows the panel. */}
+        <button
+          type="button"
+          className="sidebar-toggle"
+          aria-expanded={panelOpen}
+          aria-controls={panelId}
+          onClick={() => setPanelOpen((o) => !o)}
+        >
+          <span>Profile &amp; filters</span>
+          <span className="sidebar-toggle-meta">
+            {activeCount > 0 && <span className="count-badge">{activeCount} active</span>}
+            <span className="chevron" aria-hidden>
+              ▾
+            </span>
+          </span>
+        </button>
 
-        <h2 className="sidebar-title">Filters</h2>
-        <ToggleChips
-          label="Language"
-          options={meta?.languages ?? []}
-          selected={query.language}
-          onChange={(language) => update({ language })}
-        />
-        <ToggleChips
-          label="Label"
-          options={meta?.labels ?? []}
-          selected={query.label}
-          onChange={(label) => update({ label })}
-        />
-        <ToggleChips
-          label="Difficulty"
-          options={DIFFICULTIES}
-          format={(d) => d[0]!.toUpperCase() + d.slice(1)}
-          selected={query.difficulty}
-          onChange={(difficulty) => update({ difficulty: difficulty as Difficulty[] })}
-        />
-        {(query.language.length > 0 || query.label.length > 0 || query.difficulty.length > 0) && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => update({ language: [], label: [], difficulty: [] })}
-          >
-            Clear filters
+        <div className="sidebar-body" id={panelId}>
+          <h2 className="sidebar-title">About you</h2>
+          <ChipInput
+            label="Skills"
+            value={query.skills}
+            onChange={(skills) => update({ skills })}
+            placeholder="react, css, docs…"
+            suggestions={SKILL_SUGGESTIONS}
+          />
+          <ChipInput
+            label="Preferred languages (in order)"
+            value={query.preferredLanguages}
+            onChange={(preferredLanguages) => update({ preferredLanguages })}
+            placeholder="TypeScript, Python…"
+            suggestions={meta?.languages}
+            max={10}
+          />
+          <DifficultyPicker label="Your level" value={query.level} onChange={(level) => update({ level })} />
+          {profileChanged && (
+            <button type="button" className="btn btn-sm" onClick={saveProfile}>
+              Save as my profile
+            </button>
+          )}
+
+          <h2 className="sidebar-title">Filters</h2>
+          <ToggleChips
+            label="Language"
+            options={meta?.languages ?? []}
+            selected={query.language}
+            onChange={(language) => update({ language })}
+          />
+          <ToggleChips
+            label="Label"
+            options={meta?.labels ?? []}
+            selected={query.label}
+            onChange={(label) => update({ label })}
+          />
+          <ToggleChips
+            label="Difficulty"
+            options={DIFFICULTIES}
+            format={(d) => d[0]!.toUpperCase() + d.slice(1)}
+            selected={query.difficulty}
+            onChange={(difficulty) => update({ difficulty: difficulty as Difficulty[] })}
+          />
+          {(query.language.length > 0 || query.label.length > 0 || query.difficulty.length > 0) && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => update({ language: [], label: [], difficulty: [] })}
+            >
+              Clear filters
+            </button>
+          )}
+          <button type="button" className="btn btn-primary sidebar-done" onClick={() => setPanelOpen(false)}>
+            {data ? `Show ${data.total.toLocaleString()} result${data.total === 1 ? '' : 's'}` : 'Show results'}
           </button>
-        )}
+        </div>
       </aside>
 
       <section className="results" aria-busy={loading} aria-label="Results">

@@ -82,6 +82,24 @@ describe('Discover page', () => {
     expect(fetch.mock.calls.some(([u, init]) => u === '/api/me/saved/9' && init?.method === 'PUT')).toBe(true)
   })
 
+  it('collapses the search panel behind a toggle that counts active options', async () => {
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page([makeIssue()]) }) })
+    renderAt('/?skills=react,css&language=Go')
+    const toggle = screen.getByRole('button', { name: /profile & filters/i })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(toggle).toHaveTextContent('3 active')
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(panel.closest('.sidebar')).not.toHaveClass('is-open')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(panel.closest('.sidebar')).toHaveClass('is-open')
+
+    await screen.findByRole('link', { name: 'Fix bug 1' })
+    await userEvent.click(screen.getByRole('button', { name: 'Show 1 result' }))
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('shows a readable message for OAuth errors', async () => {
     mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page([]) }) })
     renderAt('/?authError=denied')

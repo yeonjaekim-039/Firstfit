@@ -669,6 +669,32 @@ main.container {
   margin-bottom: 12px;
 }
 
+/* Collapsible panel: the toggle and "Show results" only appear at narrow widths. */
+.sidebar-toggle,
+.sidebar-done {
+  display: none;
+}
+
+.sidebar-toggle-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.count-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.chevron {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
@@ -681,6 +707,46 @@ main.container {
   .profile-card {
     position: static;
     max-height: none;
+  }
+
+  .sidebar {
+    padding: 0;
+  }
+
+  .sidebar-toggle {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .sidebar-body {
+    display: none;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar.is-open .sidebar-body {
+    display: block;
+  }
+
+  .sidebar.is-open .chevron {
+    transform: rotate(180deg);
+  }
+
+  .sidebar-done {
+    display: flex;
+    width: 100%;
+    margin-top: 8px;
   }
 }
 
