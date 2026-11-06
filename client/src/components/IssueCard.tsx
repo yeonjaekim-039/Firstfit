@@ -1,12 +1,13 @@
 import type { Issue, ScoreBreakdown } from '../api'
 import { LOGIN_URL } from '../api'
-import { timeAgo } from '../format'
+import { formatCount, timeAgo } from '../format'
 
 const BREAKDOWN_LABELS: [keyof ScoreBreakdown, string][] = [
   ['match', 'Skill match'],
   ['labels', 'Labels'],
   ['difficulty', 'Difficulty fit'],
   ['freshness', 'Freshness'],
+  ['repo', 'Repo quality'],
 ]
 
 interface Props {
@@ -26,6 +27,12 @@ export function IssueCard({ issue, saved = false, onToggleSave, canSignIn = fals
           <a className="repo-link" href={issue.repo.url} target="_blank" rel="noreferrer">
             {issue.repo.fullName}
           </a>
+          {issue.repo.stars !== null && (
+            <span className="stars" title={`${issue.repo.stars.toLocaleString()} stars`}>
+              <span aria-hidden>★</span> {formatCount(issue.repo.stars)}
+              <span className="visually-hidden"> stars</span>
+            </span>
+          )}
           <span className="dot" aria-hidden>
             ·
           </span>

@@ -1,3 +1,11 @@
+/** 950 -> "950", 1234 -> "1.2k", 45_600 -> "45.6k", 1_200_000 -> "1.2M". */
+export function formatCount(n: number): string {
+  const trim = (x: number) => x.toFixed(1).replace(/\.0$/, '')
+  if (n >= 999_950) return `${trim(n / 1_000_000)}M`
+  if (n >= 1000) return `${trim(n / 1000)}k`
+  return String(n)
+}
+
 export function timeAgo(iso: string, now = Date.now()): string {
   const s = Math.max(0, (now - new Date(iso).getTime()) / 1000)
   const units: [number, string][] = [

@@ -493,6 +493,19 @@ main.container {
   color: var(--muted);
 }
 
+.stars {
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .repo-link {
   font-weight: 600;
   color: var(--muted);

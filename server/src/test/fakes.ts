@@ -32,6 +32,8 @@ export function makeIssue(overrides: Partial<IssueRecord> = {}): IssueRecord {
     updatedAt: NOW,
     repoFullName: 'acme/app',
     repoUrl: 'https://github.com/acme/app',
+    repoStars: null,
+    repoPushedAt: null,
     ...overrides,
   };
 }

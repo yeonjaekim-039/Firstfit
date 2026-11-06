@@ -8,6 +8,10 @@
  *   npm run ingest -- --recheck-only                 # sweep issues not seen in the last 24h
  *   npm run ingest -- --recheck-only --stale-before=2026-11-06T20:00:00Z
  *   npm run ingest -- --no-sweep --max-rechecks=1000
+ *   npm run ingest -- --repo-meta-only               # only fetch missing/stale repo metadata
+ *   npm run ingest -- --no-repo-meta --repo-max-age-days=30
+ *
+ * Phases: crawl -> repo metadata (stars, last push, archived; GraphQL, needs a token) -> sweep.
  */
 import { parseArgs } from 'node:util';
 import { config } from '../config.js';
@@ -16,6 +20,7 @@ import { crawl } from './crawl.js';
 import { GitHubClient } from './github.js';
 import { mapIssue } from './mapIssue.js';
 import { fullWindow, LABELS, LANGUAGES } from './queries.js';
+import { enrichRepos } from './repoMeta.js';
 import { sweepStale } from './sweep.js';
 import { upsertBatch } from './upsert.js';
 
@@ -31,6 +36,9 @@ async function main() {
       'no-sweep': { type: 'boolean', default: false },
       'stale-before': { type: 'string' },
       'max-rechecks': { type: 'string', default: '3000' },
+      'repo-meta-only': { type: 'boolean', default: false },
+      'no-repo-meta': { type: 'boolean', default: false },
+      'repo-max-age-days': { type: 'string', default: '7' },
     },
   });
   const split = (s?: string) => s?.split(',').map((x) => x.trim()).filter(Boolean);
@@ -48,10 +56,18 @@ async function main() {
   const { rows: clock } = await pool.query<{ now: Date }>('SELECT now()');
   const runStartedAt = clock[0]!.now;
 
-  if (!values['recheck-only']) {
+  const repoMetaOnly = values['repo-meta-only'];
+
+  if (!values['recheck-only'] && !repoMetaOnly) {
     const client = new GitHubClient({ token: config.githubToken, log });
     const seen = new Set<number>();
     const window = fullWindow();
+    // Repos already known to be archived (or gone): don't ingest their issues.
+    const { rows: archivedRows } = await pool.query<{ full_name: string }>(
+      'SELECT full_name FROM repos WHERE archived',
+    );
+    const archived = new Set(archivedRows.map((r) => r.full_name.toLowerCase()));
+    let skippedArchived = 0;
 
     for (const language of languages) {
       for (const label of labels) {
@@ -64,7 +80,9 @@ async function main() {
           log,
           shouldStop: () => seen.size >= maxIssues,
           onItems: async (items) => {
-            const mapped = items.filter((i) => !i.pull_request).map((i) => mapIssue(i, language));
+            const all = items.filter((i) => !i.pull_request).map((i) => mapIssue(i, language));
+            const mapped = all.filter((m) => !archived.has(m.repo.fullName.toLowerCase()));
+            skippedArchived += all.length - mapped.length;
             await upsertBatch(pool, mapped.map((m) => m.repo), mapped.map((m) => m.issue));
             for (const m of mapped) seen.add(m.issue.id);
           },
@@ -74,8 +92,19 @@ async function main() {
       }
       if (seen.size >= maxIssues) break;
     }
-    log(`Crawl done. Upserted ${seen.size} distinct issues.`);
+    log(`Crawl done. Upserted ${seen.size} distinct issues; skipped ${skippedArchived} from archived repos.`);
   }
+
+  if (values['no-repo-meta'] || values['recheck-only']) {
+    // Explicitly skipped, or a recheck-only run.
+  } else if (!config.githubToken) {
+    log('Skipping repo metadata: the GraphQL API requires GITHUB_TOKEN.');
+  } else {
+    const gql = new GitHubClient({ token: config.githubToken, log, minIntervalMs: 1000 });
+    const r = await enrichRepos({ pool, client: gql, maxAgeDays: Number(values['repo-max-age-days']), log });
+    log(`Repo metadata: updated ${r.fetched} (${r.archived} archived or gone), ${r.skipped} failed and will retry next run.`);
+  }
+  if (repoMetaOnly) return;
 
   // Unseen means "maybe closed" only when the crawl covered every target label without a cap.
   const fullCoverage = labels.length === LABELS.length && LABELS.every((l) => labels.includes(l));

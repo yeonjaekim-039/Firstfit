@@ -15,9 +15,9 @@ export function makeIssue(overrides: Partial<Issue> = {}): Issue {
     commentCount: 2,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    repo: { fullName: 'acme/app', url: 'https://github.com/acme/app' },
+    repo: { fullName: 'acme/app', url: 'https://github.com/acme/app', stars: 12_345, pushedAt: new Date().toISOString() },
     score: 87.4,
-    breakdown: { match: 0.74, labels: 1, difficulty: 1, freshness: 0.86 },
+    breakdown: { match: 0.74, labels: 1, difficulty: 1, freshness: 0.86, repo: 0.9 },
     ...overrides,
   }
 }

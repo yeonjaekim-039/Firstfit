@@ -12,6 +12,8 @@ export interface IssueRecord extends ScorableIssue {
   repoUrl: string;
 }
 
+// IssueRecord also carries ScorableIssue's repoStars / repoPushedAt (null until the repo's metadata is fetched).
+
 export interface IssueFilters {
   languages?: string[];
   labels?: string[];
@@ -68,7 +70,7 @@ export interface SavedStore {
 const ISSUE_COLUMNS = `
   i.id, i.number, i.title, i.url, i.labels, i.language, i.difficulty, i.assignee,
   i.comment_count, i.github_created_at, i.github_updated_at,
-  r.full_name AS repo_full_name, r.html_url AS repo_url`;
+  r.full_name AS repo_full_name, r.html_url AS repo_url, r.stars AS repo_stars, r.pushed_at AS repo_pushed_at`;
 
 interface IssueRow {
   id: string; // BIGINT comes back as string
@@ -84,6 +86,8 @@ interface IssueRow {
   github_updated_at: Date;
   repo_full_name: string;
   repo_url: string;
+  repo_stars: number | null;
+  repo_pushed_at: Date | null;
 }
 
 function toIssueRecord(r: IssueRow): IssueRecord {
@@ -101,13 +105,15 @@ function toIssueRecord(r: IssueRow): IssueRecord {
     updatedAt: r.github_updated_at,
     repoFullName: r.repo_full_name,
     repoUrl: r.repo_url,
+    repoStars: r.repo_stars,
+    repoPushedAt: r.repo_pushed_at,
   };
 }
 
 export function createIssueStore(pool: pg.Pool): IssueStore {
   return {
     async findCandidates(filters, limit) {
-      const where = ["i.state = 'open'", 'i.assignee IS NULL'];
+      const where = ["i.state = 'open'", 'i.assignee IS NULL', 'NOT r.archived'];
       const params: unknown[] = [];
       const add = (clause: (p: string) => string, value: unknown) => {
         params.push(value);
@@ -208,13 +214,14 @@ export function createSavedStore(pool: pg.Pool): SavedStore {
            FROM saved_issues s
            JOIN issues i ON i.id = s.issue_id
            JOIN repos r ON r.id = i.repo_id
-          WHERE s.user_id = $1 AND i.state = 'open'
+          WHERE s.user_id = $1 AND i.state = 'open' AND NOT r.archived
           ORDER BY s.saved_at DESC`,
         [userId],
       );
       const { rows: hidden } = await pool.query<{ count: string }>(
-        `SELECT count(*) FROM saved_issues s JOIN issues i ON i.id = s.issue_id
-          WHERE s.user_id = $1 AND i.state <> 'open'`,
+        `SELECT count(*) FROM saved_issues s
+           JOIN issues i ON i.id = s.issue_id JOIN repos r ON r.id = i.repo_id
+          WHERE s.user_id = $1 AND (i.state <> 'open' OR r.archived)`,
         [userId],
       );
       return {
@@ -225,8 +232,9 @@ export function createSavedStore(pool: pg.Pool): SavedStore {
 
     async ids(userId) {
       const { rows } = await pool.query<{ issue_id: string }>(
-        `SELECT s.issue_id FROM saved_issues s JOIN issues i ON i.id = s.issue_id
-          WHERE s.user_id = $1 AND i.state = 'open'`,
+        `SELECT s.issue_id FROM saved_issues s
+           JOIN issues i ON i.id = s.issue_id JOIN repos r ON r.id = i.repo_id
+          WHERE s.user_id = $1 AND i.state = 'open' AND NOT r.archived`,
         [userId],
       );
       return rows.map((r) => Number(r.issue_id));
@@ -235,7 +243,8 @@ export function createSavedStore(pool: pg.Pool): SavedStore {
     async save(userId, issueId) {
       const { rowCount } = await pool.query(
         `INSERT INTO saved_issues (user_id, issue_id)
-         SELECT $1, id FROM issues WHERE id = $2 AND state = 'open'
+         SELECT $1, i.id FROM issues i JOIN repos r ON r.id = i.repo_id
+          WHERE i.id = $2 AND i.state = 'open' AND NOT r.archived
          ON CONFLICT DO NOTHING`,
         [userId, issueId],
       );

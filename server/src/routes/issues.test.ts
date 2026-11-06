@@ -40,7 +40,7 @@ describe('GET /api/issues', () => {
   it('ranks by skills, preferred languages and level', async () => {
     const { app } = setup([
       makeIssue({ id: 1, language: 'Go', title: 'Refactor CLI flags' }),
-      makeIssue({ id: 2, language: 'Python', title: 'Fix Django admin typo' }),
+      makeIssue({ id: 2, language: 'Python', title: 'Fix Django admin typo', repoFullName: 'django/admin', repoStars: 80_000, repoPushedAt: NOW }),
       makeIssue({ id: 3, language: 'Python', title: 'Rewrite scheduler', difficulty: 'hard' }),
     ]);
     const res = await request(app)
@@ -50,10 +50,12 @@ describe('GET /api/issues', () => {
     expect(res.body.items.map((i: { id: number }) => i.id)).toEqual([2, 1, 3]);
     expect(res.body.items[0]).toMatchObject({
       id: 2,
-      repo: { fullName: 'acme/app', url: 'https://github.com/acme/app' },
-      breakdown: { match: 1, labels: 1, difficulty: 1, freshness: 1 },
+      repo: { fullName: 'django/admin', url: 'https://github.com/acme/app', stars: 80_000, pushedAt: NOW.toISOString() },
+      breakdown: { match: 1, labels: 1, difficulty: 1, freshness: 1, repo: 1 },
       score: 100,
     });
+    // Repos without fetched metadata serialize as null rather than being omitted.
+    expect(res.body.items[1].repo).toMatchObject({ stars: null, pushedAt: null });
   });
 
   it('paginates the ranked list', async () => {

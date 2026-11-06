@@ -103,7 +103,7 @@ export async function findStaleIssues(
   const { rows } = await pool.query<{ id: string; owner: string; name: string; number: number; total: string }>(
     `SELECT i.id, r.owner, r.name, i.number, count(*) OVER () AS total
        FROM issues i JOIN repos r ON r.id = i.repo_id
-      WHERE i.state = 'open' AND i.ingested_at < $1 ${langClause}
+      WHERE i.state = 'open' AND NOT r.archived AND i.ingested_at < $1 ${langClause}
       ORDER BY i.ingested_at ASC
       LIMIT $${params.length}`,
     params,

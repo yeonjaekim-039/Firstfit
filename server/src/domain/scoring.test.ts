@@ -6,6 +6,8 @@ import {
   labelScore,
   matchScore,
   rankIssues,
+  REPO_ACTIVITY_HALF_LIFE_DAYS,
+  repoQualityScore,
   type ScorableIssue,
   scoreIssue,
   type UserProfile,
@@ -180,19 +182,87 @@ describe('freshnessScore', () => {
   });
 });
 
+describe('repoQualityScore', () => {
+  it('is neutral (0.5) when nothing is known', () => {
+    expect(repoQualityScore(null, null, NOW)).toBe(0.5);
+    expect(repoQualityScore(undefined, undefined, NOW)).toBe(0.5);
+  });
+
+  it('log-scales stars and saturates at 10k', () => {
+    const starsOnly = (stars: number) => (repoQualityScore(stars, NOW, NOW) - 0.4) / 0.6;
+    expect(starsOnly(0)).toBeCloseTo(0);
+    expect(starsOnly(99)).toBeCloseTo(0.5);
+    expect(starsOnly(9_999)).toBeCloseTo(1);
+    expect(starsOnly(1_000_000)).toBe(1);
+  });
+
+  it('rewards recent pushes with a 90-day half-life', () => {
+    const activityOnly = (days: number) => (repoQualityScore(9_999, daysAgo(days), NOW) - 0.6) / 0.4;
+    expect(activityOnly(0)).toBeCloseTo(1);
+    expect(activityOnly(REPO_ACTIVITY_HALF_LIFE_DAYS)).toBeCloseTo(0.5);
+    expect(activityOnly(REPO_ACTIVITY_HALF_LIFE_DAYS * 4)).toBeCloseTo(1 / 16);
+  });
+
+  it('is monotonic in stars and in recency', () => {
+    expect(repoQualityScore(1000, NOW, NOW)).toBeGreaterThan(repoQualityScore(10, NOW, NOW));
+    expect(repoQualityScore(100, daysAgo(5), NOW)).toBeGreaterThan(repoQualityScore(100, daysAgo(500), NOW));
+  });
+
+  it('treats each missing signal as neutral independently', () => {
+    expect(repoQualityScore(9_999, null, NOW)).toBeCloseTo(0.6 + 0.4 * 0.5);
+    expect(repoQualityScore(null, NOW, NOW)).toBeCloseTo(0.6 * 0.5 + 0.4);
+  });
+
+  it('clamps negative stars and future push dates', () => {
+    expect(repoQualityScore(-5, daysAgo(-10), NOW)).toBeCloseTo(0.4);
+  });
+});
+
 describe('scoreIssue', () => {
+  it('gives a small boost (at most 5 points) to popular, active repos', () => {
+    const p = profile({ preferredLanguages: ['TypeScript'], difficulty: 'easy' });
+    const best = scoreIssue(issue({ repoStars: 20_000, repoPushedAt: NOW }), p, NOW)!.score;
+    const worst = scoreIssue(issue({ repoStars: 0, repoPushedAt: daysAgo(3000) }), p, NOW)!.score;
+    const unknown = scoreIssue(issue(), p, NOW)!.score;
+    expect(best).toBeGreaterThan(unknown);
+    expect(unknown).toBeGreaterThan(worst);
+    expect(best - worst).toBeLessThanOrEqual(WEIGHTS.repo * 100 + 1e-9);
+  });
+
+  it('never lets repo quality outrank a clearly better match', () => {
+    const p = profile({ preferredLanguages: ['TypeScript'], difficulty: 'easy' });
+    const ranked = rankIssues(
+      [
+        issue({ id: 1, language: 'Go', repoStars: 200_000, repoPushedAt: NOW }),
+        issue({ id: 2, repoStars: 0, repoPushedAt: daysAgo(2000) }),
+      ],
+      p,
+      NOW,
+    );
+    expect(ranked[0]!.issue.id).toBe(2);
+  });
+
+  it('breaks otherwise-equal ties in favour of the stronger repo', () => {
+    const ranked = rankIssues(
+      [issue({ id: 1, repoStars: 3 }), issue({ id: 2, repoStars: 30_000 })],
+      profile(),
+      NOW,
+    );
+    expect(ranked.map((r) => r.issue.id)).toEqual([2, 1]);
+  });
+
   it('returns null for assigned issues', () => {
     expect(scoreIssue(issue({ assignee: 'octocat' }), profile(), NOW)).toBeNull();
   });
 
   it('scores a perfect match as 100', () => {
     const result = scoreIssue(
-      issue({ title: 'React: add dark mode' }),
+      issue({ title: 'React: add dark mode', repoStars: 50_000, repoPushedAt: NOW }),
       profile({ skills: ['react'], preferredLanguages: ['TypeScript'], difficulty: 'easy' }),
       NOW,
     )!;
     expect(result.score).toBe(100);
-    expect(result.breakdown).toEqual({ match: 1, labels: 1, difficulty: 1, freshness: 1 });
+    expect(result.breakdown).toEqual({ match: 1, labels: 1, difficulty: 1, freshness: 1, repo: 1 });
   });
 
   it('combines components using WEIGHTS', () => {
@@ -201,8 +271,13 @@ describe('scoreIssue', () => {
       profile({ preferredLanguages: ['Go'], difficulty: 'easy' }),
       NOW,
     )!;
+    // No repo metadata -> neutral 0.5 for the repo component.
     const expected =
-      WEIGHTS.match * 0 + WEIGHTS.labels * 0.6 + WEIGHTS.difficulty * 0.3 + WEIGHTS.freshness * 0.5;
+      WEIGHTS.match * 0 +
+      WEIGHTS.labels * 0.6 +
+      WEIGHTS.difficulty * 0.3 +
+      WEIGHTS.freshness * 0.5 +
+      WEIGHTS.repo * 0.5;
     expect(result.score).toBeCloseTo(expected * 100, 1);
   });
 

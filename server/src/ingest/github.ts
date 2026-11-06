@@ -23,6 +23,17 @@ export type GitHubIssue = GitHubSearchIssue;
 
 const GONE_STATUSES = new Set([404, 410, 451]);
 
+export interface GraphQLError {
+  type?: string;
+  path?: (string | number)[];
+  message: string;
+}
+
+export interface GraphQLResult<T> {
+  data: T | null;
+  errors: GraphQLError[];
+}
+
 export interface SearchPage {
   totalCount: number;
   incomplete: boolean;
@@ -92,7 +103,30 @@ export class GitHubClient {
     return (await this.request(url, { goneOk: true })) as GitHubIssue | null;
   }
 
-  private async request(url: string, opts: { goneOk?: boolean } = {}): Promise<unknown> {
+  /**
+   * Runs a GraphQL query (requires a token). GraphQL reports per-field failures such as NOT_FOUND
+   * inside a 200 response, so `data` can be partial; those errors are returned to the caller.
+   * RATE_LIMITED is retried after waiting for the window to reset.
+   */
+  async graphql<T>(query: string, variables: Record<string, unknown>): Promise<GraphQLResult<T>> {
+    if (!this.token) throw new Error('The GitHub GraphQL API requires GITHUB_TOKEN');
+    for (let attempt = 0; ; attempt++) {
+      const body = (await this.request('https://api.github.com/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query, variables }),
+      })) as GraphQLResult<T>;
+      const rateLimited = body.errors?.some((e) => e.type === 'RATE_LIMITED');
+      if (!rateLimited) return { data: body.data ?? null, errors: body.errors ?? [] };
+      if (attempt >= this.maxRetries) throw new Error('GitHub GraphQL rate limit: retries exhausted');
+      this.log(`GraphQL rate limited; retry ${attempt + 1}/${this.maxRetries} in 60s`);
+      await this.sleep(60_000);
+    }
+  }
+
+  private async request(
+    url: string,
+    opts: { goneOk?: boolean; method?: string; body?: string } = {},
+  ): Promise<unknown> {
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -106,7 +140,11 @@ export class GitHubClient {
       this.lastRequestAt = this.now();
       this.requestCount++;
 
-      const res = await this.fetchFn(url, { headers });
+      const res = await this.fetchFn(url, {
+        method: opts.method ?? 'GET',
+        headers: opts.body ? { ...headers, 'Content-Type': 'application/json' } : headers,
+        body: opts.body,
+      });
 
       if (res.ok) {
         // Proactively pause when the window is exhausted, so the next call doesn't 403.

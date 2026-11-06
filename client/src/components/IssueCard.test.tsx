@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { makeIssue } from '../test/mockApi'
-import { timeAgo } from '../format'
+import { formatCount, timeAgo } from '../format'
 import { IssueCard } from './IssueCard'
 
 describe('IssueCard', () => {
@@ -17,6 +17,18 @@ describe('IssueCard', () => {
     expect(screen.getByLabelText('Match score 87.4 out of 100')).toHaveTextContent('87/100')
     expect(screen.getByText('Skill match').nextElementSibling).toHaveTextContent('74%')
     expect(screen.getByText('Freshness').nextElementSibling).toHaveTextContent('86%')
+    expect(screen.getByText('Repo quality').nextElementSibling).toHaveTextContent('90%')
+  })
+
+  it('shows the repo star count, abbreviated, with the exact count in the tooltip', () => {
+    render(<IssueCard issue={issue} />)
+    const stars = screen.getByTitle('12,345 stars')
+    expect(stars).toHaveTextContent('★ 12.3k stars')
+  })
+
+  it('omits the star count when repo metadata has not been fetched', () => {
+    render(<IssueCard issue={makeIssue({ repo: { fullName: 'a/b', url: 'u', stars: null, pushedAt: null } })} />)
+    expect(screen.queryByText(/★/)).toBeNull()
   })
 
   it('links directly to the issue and repo in a new tab', () => {
@@ -45,6 +57,21 @@ describe('IssueCard', () => {
   it('mentions an assignee when present', () => {
     render(<IssueCard issue={makeIssue({ assignee: 'someone' })} />)
     expect(screen.getByText(/assigned to someone/)).toBeInTheDocument()
+  })
+})
+
+describe('formatCount', () => {
+  it.each([
+    [0, '0'],
+    [950, '950'],
+    [1000, '1k'],
+    [1234, '1.2k'],
+    [45_600, '45.6k'],
+    [999_949, '999.9k'],
+    [999_950, '1M'],
+    [1_200_000, '1.2M'],
+  ])('%d -> %s', (n, expected) => {
+    expect(formatCount(n)).toBe(expected)
   })
 })
 

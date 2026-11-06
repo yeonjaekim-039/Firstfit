@@ -9,6 +9,9 @@ export interface ScorableIssue {
   difficulty: Difficulty;
   assignee: string | null;
   updatedAt: Date | string;
+  /** Repo metadata; null/undefined until fetched during ingest. */
+  repoStars?: number | null;
+  repoPushedAt?: Date | string | null;
 }
 
 export interface UserProfile {
@@ -25,6 +28,8 @@ export interface ScoreBreakdown {
   labels: number;
   difficulty: number;
   freshness: number;
+  /** Repo quality: stars and recent pushes. Deliberately small weight; a tie-breaker, not a driver. */
+  repo: number;
 }
 
 export interface ScoredIssue<T extends ScorableIssue = ScorableIssue> {
@@ -34,11 +39,17 @@ export interface ScoredIssue<T extends ScorableIssue = ScorableIssue> {
 }
 
 export const WEIGHTS: Readonly<ScoreBreakdown> = {
-  match: 0.4,
-  labels: 0.2,
-  difficulty: 0.25,
-  freshness: 0.15,
+  match: 0.38,
+  labels: 0.19,
+  difficulty: 0.24,
+  freshness: 0.14,
+  repo: 0.05,
 };
+
+/** Stars saturate at 10^4: log10(stars + 1) / 4, capped at 1 (100 stars = 0.5). */
+export const REPO_STARS_SATURATION_LOG10 = 4;
+/** Repo activity halves every this many days since the last push. */
+export const REPO_ACTIVITY_HALF_LIFE_DAYS = 90;
 
 /** Freshness halves every this many days since the issue was last updated. */
 export const FRESHNESS_HALF_LIFE_DAYS = 45;
@@ -125,6 +136,24 @@ export function freshnessScore(updatedAt: Date | string, now: Date): number {
   return 0.5 ** (ageDays / FRESHNESS_HALF_LIFE_DAYS);
 }
 
+/**
+ * Repo quality in 0..1: 60% stars (log-scaled), 40% recency of the last push.
+ * Each missing signal scores neutral (0.5), so unfetched repos are neither boosted nor buried.
+ */
+export function repoQualityScore(
+  stars: number | null | undefined,
+  pushedAt: Date | string | null | undefined,
+  now: Date,
+): number {
+  const starPart =
+    stars == null ? NEUTRAL : Math.min(Math.log10(Math.max(stars, 0) + 1) / REPO_STARS_SATURATION_LOG10, 1);
+  const activityPart =
+    pushedAt == null
+      ? NEUTRAL
+      : 0.5 ** (Math.max(0, (now.getTime() - new Date(pushedAt).getTime()) / DAY_MS) / REPO_ACTIVITY_HALF_LIFE_DAYS);
+  return 0.6 * starPart + 0.4 * activityPart;
+}
+
 /** Scores one issue for a user. Returns null for issues that should not be recommended (assigned). */
 export function scoreIssue<T extends ScorableIssue>(
   issue: T,
@@ -138,6 +167,7 @@ export function scoreIssue<T extends ScorableIssue>(
     labels: labelScore(issue.labels, profile.preferredLabels),
     difficulty: difficultyFit(issue.difficulty, profile.difficulty),
     freshness: freshnessScore(issue.updatedAt, now),
+    repo: repoQualityScore(issue.repoStars, issue.repoPushedAt, now),
   };
   const weighted = (Object.keys(WEIGHTS) as (keyof ScoreBreakdown)[]).reduce(
     (sum, key) => sum + WEIGHTS[key] * breakdown[key],

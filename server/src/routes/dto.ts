@@ -15,7 +15,12 @@ export function toIssueDto(issue: IssueRecord, score: number, breakdown: ScoreBr
     commentCount: issue.commentCount,
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
-    repo: { fullName: issue.repoFullName, url: issue.repoUrl },
+    repo: {
+      fullName: issue.repoFullName,
+      url: issue.repoUrl,
+      stars: issue.repoStars ?? null,
+      pushedAt: issue.repoPushedAt ?? null,
+    },
     score,
     breakdown,
   };

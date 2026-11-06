@@ -78,6 +78,35 @@ describe('GitHubClient', () => {
     expect(String(fetchFn.mock.calls[0]![0 as never])).toBe('https://api.github.com/repos/acme/widgets/issues/7');
   });
 
+  it('graphql POSTs query and variables and returns partial data with errors', async () => {
+    const { client, fetchFn } = makeClient([
+      jsonResponse({ data: { r0: null }, errors: [{ type: 'NOT_FOUND', path: ['r0'], message: 'nf' }] }),
+    ]);
+    const result = await client.graphql('query($o0: String!) { r0: repository(owner: $o0) { id } }', { o0: 'a' });
+    expect(result).toEqual({ data: { r0: null }, errors: [{ type: 'NOT_FOUND', path: ['r0'], message: 'nf' }] });
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.github.com/graphql');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      query: 'query($o0: String!) { r0: repository(owner: $o0) { id } }',
+      variables: { o0: 'a' },
+    });
+  });
+
+  it('graphql retries RATE_LIMITED responses after waiting', async () => {
+    const { client, sleeps } = makeClient([
+      jsonResponse({ data: null, errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }] }),
+      jsonResponse({ data: { ok: true } }),
+    ]);
+    expect(await client.graphql('{ ok }', {})).toEqual({ data: { ok: true }, errors: [] });
+    expect(sleeps).toContain(60_000);
+  });
+
+  it('graphql refuses to run without a token', async () => {
+    const tokenless = new GitHubClient({ fetchFn: vi.fn() as unknown as typeof fetch, minIntervalMs: 0 });
+    await expect(tokenless.graphql('{ ok }', {})).rejects.toThrow(/GITHUB_TOKEN/);
+  });
+
   it('search still throws on 404', async () => {
     const { client } = makeClient([jsonResponse({ message: 'nope' }, 404)]);
     await expect(client.searchIssues('q', 1)).rejects.toThrow(/404/);

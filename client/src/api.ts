@@ -6,6 +6,7 @@ export interface ScoreBreakdown {
   labels: number
   difficulty: number
   freshness: number
+  repo: number
 }
 
 export interface Issue {
@@ -20,7 +21,8 @@ export interface Issue {
   commentCount: number
   createdAt: string
   updatedAt: string
-  repo: { fullName: string; url: string }
+  /** stars / pushedAt are null until the repo's metadata has been fetched. */
+  repo: { fullName: string; url: string; stars: number | null; pushedAt: string | null }
   score: number
   breakdown: ScoreBreakdown
 }

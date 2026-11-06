@@ -24,22 +24,28 @@ npm run migrate     # server: apply server/migrations/*.sql
 npm run ingest      # server: pull issues from GitHub into Postgres
 npm run ingest -- --languages=Go,Rust --labels="good first issue" --max-issues=500
 npm run ingest -- --recheck-only     # only re-check open issues not seen in 24h
+npm run ingest -- --repo-meta-only   # only fetch missing/stale repo metadata (stars, last push, archived)
 ```
+
+`npm run ingest` runs in three phases: crawl, then repo metadata (`--no-repo-meta` to skip; refetches after `--repo-max-age-days`, default 7), then the closed-issue sweep.
 
 ## Server architecture
 
 - `src/domain/scoring.ts`: **pure** scoring and ranking. No I/O; `now` is passed in. Score is 0–100:
-  `match 0.4` (preferred-language order + skill token match against title/labels/repo/language),
-  `labels 0.2` (beginner-label weights, or 1.0 for a user-preferred label),
-  `difficulty 0.25` (fit vs. user level; harder-than-level is penalized more than easier),
-  `freshness 0.15` (exponential decay, 45-day half-life on `updated_at`).
-  Assigned issues return `null` and are dropped. Missing profile inputs score a neutral 0.5.
+  `match 0.38` (preferred-language order + skill token match against title/labels/repo/language),
+  `labels 0.19` (beginner-label weights, or 1.0 for a user-preferred label),
+  `difficulty 0.24` (fit vs. user level; harder-than-level is penalized more than easier),
+  `freshness 0.14` (exponential decay, 45-day half-life on `updated_at`),
+  `repo 0.05` (small quality boost: 60% stars, log-scaled and saturating at 10k; 40% last push, 90-day half-life).
+  Assigned issues return `null` and are dropped. Missing profile inputs, and repos without fetched metadata, score a neutral 0.5.
 - `src/ingest/`: ingestion pipeline.
   - `github.ts`: REST search client. Spaces requests (2.1s with a token, 6.1s without), waits for `x-ratelimit-reset` / `retry-after`, retries on 403/429/5xx.
   - `crawl.ts`: one query per (label, language). GitHub caps search at **1000 results per query**, so windows over the cap are split recursively by `created:` date.
   - `difficulty.ts`: easy/medium/hard heuristic from labels, comment count, and body length.
   - `mapIssue.ts`: maps a search item to rows. Labels are lowercased and de-duplicated. `language` is the *queried* language, because search results don't include repo language.
   - `upsert.ts`: multi-row `INSERT ... ON CONFLICT` per page in one transaction (rows are de-duplicated first).
+  - `repoMeta.ts`: caches `stars`, `pushed_at`, `archived` on `repos` via **GraphQL** (`GitHubClient.graphql`; needs a token), 50 aliased `repository(...)` lookups per request (~1 point each), so tens of thousands of repos take minutes instead of hours over REST. NOT_FOUND repos are stored as `archived = true`; other per-repo errors leave `metadata_fetched_at` null so they retry. `buildRepoQuery` / `parseRepoResults` are pure and unit-tested.
+  - **Archived repos are skipped everywhere:** the crawl doesn't upsert issues from known-archived repos, and search candidates, saved issues and the sweep all filter `NOT r.archived` (saved issues in archived repos count toward `hiddenClosed`).
 - `src/db/stores.ts`: `IssueStore` / `UserStore` / `SavedStore` interfaces plus pg implementations. `createApp(deps)` takes stores, the session codec, and the OAuth client via injection; route tests build deps with `makeDeps()` from `src/test/fakes.ts` (in-memory stores, fake OAuth).
 - `src/auth/`: `session.ts` is a stateless HMAC-signed cookie (`gim_session`, 30 days, httpOnly, SameSite=Lax; nothing is stored server-side). `githubOAuth.ts` is the GitHub web flow (no scopes: public profile only).
 - `src/routes/auth.ts`: `GET /api/auth/github` sets a `gim_oauth_state` cookie and redirects to GitHub. `GET /api/auth/github/callback` checks state, exchanges the code, upserts the user by `github_id`, sets the session, and redirects to `${CLIENT_URL}/dashboard` (or `/?authError=denied|state|failed|unavailable`). `POST /api/auth/logout`.
@@ -65,7 +71,7 @@ The response contains `total` (rows matching the filters), `rankedCount` (rows a
 - `src/api.ts`: types and fetch wrappers for every endpoint. `src/session.tsx` is a `SessionProvider` (meta, current user, saved ids, optimistic `toggleSave`); read it with `useSession()` from `src/sessionContext.ts`.
 - Routes (react-router v8): `/` = `pages/DiscoverPage.tsx`, `/dashboard` = `pages/DashboardPage.tsx`.
 - Discover state lives in the **URL** (`skills`, `langs`, `level`, `language`, `label`, `difficulty`, `page`; see `pages/discoverQuery.ts`), so searches are shareable and back/forward works. Signed-in users with no profile params in the URL get the form seeded from their saved profile.
-- Components: `ChipInput` (free-text tags), `ToggleChips` (multi-select filters), `DifficultyPicker`, `IssueCard` (links, labels, score breakdown, save), `Pagination`, `Layout`. Plain CSS in `src/index.css` with light/dark tokens; breakpoints at 900px (single column; the Discover sidebar collapses behind a "Profile & filters" toggle via `.sidebar.is-open`) and 600px (card score moves below).
+- Components: `ChipInput` (free-text tags), `ToggleChips` (multi-select filters), `DifficultyPicker`, `IssueCard` (links, repo stars via `formatCount`, labels, 5-part score breakdown, save), `Pagination`, `Layout`. Plain CSS in `src/index.css` with light/dark tokens; breakpoints at 900px (single column; the Discover sidebar collapses behind a "Profile & filters" toggle via `.sidebar.is-open`) and 600px (card score moves below).
 - Login is a plain link to `/api/auth/github` through the Vite proxy, so the session cookie is first-party on `:5173`. The GitHub OAuth App's callback URL must be `http://localhost:5173/api/auth/github/callback`.
 - Tests mock `fetch` with `src/test/mockApi.ts`. Vitest globals are off, so `src/test/setup.ts` registers Testing Library's `cleanup` explicitly.
 - oxlint's `only-export-components` rule: keep non-component exports (hooks, helpers) out of `.tsx` component files.
@@ -73,7 +79,7 @@ The response contains `total` (rows matching the filters), `rankedCount` (rows a
 ## Database
 
 The schema is in `server/migrations/` (plain SQL, applied in filename order and tracked in `schema_migrations`). Add new migrations as `NNN_description.sql`; never edit an applied one.
-Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN index, `difficulty` enum, `state` ∈ open/closed/delisted), `users` (`github_id` unique, used as the OAuth upsert key), `saved_issues`.
+Tables: `repos`, `issues` (PK = GitHub issue id, `labels TEXT[]` with a GIN index, `difficulty` enum, `state` ∈ open/closed/delisted), `repos` metadata (`stars`, `pushed_at`, `archived`, `metadata_fetched_at`), `users` (`github_id` unique, used as the OAuth upsert key), `saved_issues`.
 
 ## Conventions and gotchas
 
