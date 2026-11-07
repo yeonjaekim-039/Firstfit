@@ -1,8 +1,8 @@
 import type { IssueRecord } from '../db/stores.js';
-import type { ScoreBreakdown } from '../domain/scoring.js';
+import type { ScoredIssue } from '../domain/scoring.js';
 
 /** JSON shape of an issue card, shared by /api/issues and /api/me/saved. */
-export function toIssueDto(issue: IssueRecord, score: number, breakdown: ScoreBreakdown) {
+export function toIssueDto({ issue, score, breakdown, crowding }: ScoredIssue<IssueRecord>) {
   return {
     id: issue.id,
     number: issue.number,
@@ -23,5 +23,7 @@ export function toIssueDto(issue: IssueRecord, score: number, breakdown: ScoreBr
     },
     score,
     breakdown,
+    /** Multiplier already applied to `score` for busy threads (1 = none). */
+    crowding,
   };
 }

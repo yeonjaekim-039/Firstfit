@@ -20,6 +20,14 @@ describe('IssueCard', () => {
     expect(screen.getByText('Repo quality').nextElementSibling).toHaveTextContent('90%')
   })
 
+  it('explains a busy-thread penalty only when one was applied', () => {
+    const { unmount } = render(<IssueCard issue={issue} />)
+    expect(screen.queryByText(/busy thread/)).not.toBeInTheDocument()
+    unmount()
+    render(<IssueCard issue={makeIssue({ commentCount: 30, crowding: 0.85 })} />)
+    expect(screen.getByText('−15% for a busy thread (30 comments)')).toBeInTheDocument()
+  })
+
   it('shows the repo star count, abbreviated, with the exact count in the tooltip', () => {
     render(<IssueCard issue={issue} />)
     const stars = screen.getByTitle('12,345 stars')

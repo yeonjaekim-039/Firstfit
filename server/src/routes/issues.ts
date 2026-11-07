@@ -79,9 +79,7 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
       rankedCount: ranked.length,
       totalPages: Math.ceil(ranked.length / q.pageSize),
       profile,
-      items: ranked
-        .slice(start, start + q.pageSize)
-        .map(({ issue, score, breakdown }) => toIssueDto(issue, score, breakdown)),
+      items: ranked.slice(start, start + q.pageSize).map(toIssueDto),
     });
   });
 

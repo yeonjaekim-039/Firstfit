@@ -62,7 +62,8 @@ export function meRouter(deps: { userStore: UserStore; savedStore: SavedStore; n
     const items = rows.map((issue) => {
       // Saved issues are shown even if someone has since been assigned, so score them as unassigned.
       const scored = scoreIssue({ ...issue, assignee: null }, profile ?? { skills: [], preferredLanguages: [] }, at)!;
-      return { ...toIssueDto(issue, scored.score, scored.breakdown), savedAt: issue.savedAt };
+      // Score as unassigned, but show the real assignee.
+      return { ...toIssueDto({ ...scored, issue }), savedAt: issue.savedAt };
     });
     res.json({ items, hiddenClosed });
   });

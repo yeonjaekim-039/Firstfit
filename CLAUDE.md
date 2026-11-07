@@ -37,6 +37,7 @@ npm run ingest -- --repo-meta-only   # only fetch missing/stale repo metadata (s
   `difficulty 0.24` (fit vs. user level; harder-than-level is penalized more than easier),
   `freshness 0.14` (exponential decay, 45-day half-life on `updated_at`),
   `repo 0.05` (small quality boost: 60% stars, log-scaled and saturating at 10k; 40% last push, 90-day half-life).
+  The weighted sum is then multiplied by `crowdingMultiplier(commentCount)`: 1 up to 15 comments, log-scaled down to 0.7 at 60+ (returned as `crowding` in the API; the card shows a note when < 1).
   Assigned issues return `null` and are dropped. Missing profile inputs, and repos without fetched metadata, score a neutral 0.5.
 - `src/ingest/`: ingestion pipeline.
   - `github.ts`: REST search client. Spaces requests (2.1s with a token, 6.1s without), waits for `x-ratelimit-reset` / `retry-after`, retries on 403/429/5xx.

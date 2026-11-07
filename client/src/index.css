@@ -612,6 +612,12 @@ main.container {
   gap: 6px;
 }
 
+.score-note {
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--medium);
+}
+
 .breakdown-row dt {
   font-size: 0.75rem;
   color: var(--muted);

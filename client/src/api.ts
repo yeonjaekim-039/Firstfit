@@ -25,6 +25,8 @@ export interface Issue {
   repo: { fullName: string; url: string; stars: number | null; pushedAt: string | null }
   score: number
   breakdown: ScoreBreakdown
+  /** Multiplier already applied to `score` for very long comment threads (1 = no penalty). */
+  crowding: number
 }
 
 export interface SavedIssue extends Issue {

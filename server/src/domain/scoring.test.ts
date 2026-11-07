@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CROWDING_FLOOR,
+  CROWDING_FLOOR_COMMENTS,
+  CROWDING_FREE_COMMENTS,
+  crowdingMultiplier,
   difficultyFit,
   FRESHNESS_HALF_LIFE_DAYS,
   freshnessScore,
@@ -218,7 +222,54 @@ describe('repoQualityScore', () => {
   });
 });
 
+describe('crowdingMultiplier', () => {
+  it('does not penalise unknown, quiet or moderately discussed issues', () => {
+    expect(crowdingMultiplier(undefined)).toBe(1);
+    expect(crowdingMultiplier(null)).toBe(1);
+    expect(crowdingMultiplier(0)).toBe(1);
+    expect(crowdingMultiplier(CROWDING_FREE_COMMENTS)).toBe(1);
+  });
+
+  it('decreases monotonically on a log scale past the threshold', () => {
+    const at = [16, 20, 30, 45, CROWDING_FLOOR_COMMENTS].map(crowdingMultiplier);
+    for (let i = 1; i < at.length; i++) expect(at[i]!).toBeLessThan(at[i - 1]!);
+    // 30 comments is halfway between 15 and 60 in log space, so halfway to the floor.
+    expect(crowdingMultiplier(30)).toBeCloseTo(1 - (1 - CROWDING_FLOOR) / 2, 10);
+  });
+
+  it('bottoms out at the floor and stays there', () => {
+    expect(crowdingMultiplier(CROWDING_FLOOR_COMMENTS)).toBeCloseTo(CROWDING_FLOOR, 10);
+    expect(crowdingMultiplier(500)).toBe(CROWDING_FLOOR);
+    expect(crowdingMultiplier(10_000)).toBe(CROWDING_FLOOR);
+  });
+});
+
 describe('scoreIssue', () => {
+  it('scales the score down for very busy threads and reports the multiplier', () => {
+    const p = profile({ preferredLanguages: ['TypeScript'], difficulty: 'easy' });
+    const quiet = scoreIssue(issue({ commentCount: 3 }), p, NOW)!;
+    const busy = scoreIssue(issue({ commentCount: 200 }), p, NOW)!;
+    expect(quiet.crowding).toBe(1);
+    expect(busy.crowding).toBe(CROWDING_FLOOR);
+    expect(busy.breakdown).toEqual(quiet.breakdown); // components are untouched
+    expect(busy.score).toBeCloseTo(quiet.score * CROWDING_FLOOR, 0);
+  });
+
+  it('ranks a busy thread below an otherwise identical quiet one, but not below a much worse match', () => {
+    const p = profile({ preferredLanguages: ['TypeScript'], difficulty: 'easy' });
+    const ranked = rankIssues(
+      [
+        issue({ id: 1, commentCount: 80 }), // great match, crowded
+        issue({ id: 2, commentCount: 2 }), // same match, quiet
+        issue({ id: 3, commentCount: 0, language: 'Go', labels: [], difficulty: 'hard', updatedAt: daysAgo(365) }),
+      ],
+      p,
+      NOW,
+    );
+    expect(ranked.map((r) => r.issue.id)).toEqual([2, 1, 3]);
+  });
+
+
   it('gives a small boost (at most 5 points) to popular, active repos', () => {
     const p = profile({ preferredLanguages: ['TypeScript'], difficulty: 'easy' });
     const best = scoreIssue(issue({ repoStars: 20_000, repoPushedAt: NOW }), p, NOW)!.score;

@@ -104,6 +104,11 @@ export function IssueCard({ issue, saved = false, onToggleSave, canSignIn = fals
             )
           })}
         </dl>
+        {issue.crowding < 1 && (
+          <p className="score-note" title="Long threads often mean the issue is contested or already being worked on">
+            −{Math.round((1 - issue.crowding) * 100)}% for a busy thread ({issue.commentCount} comments)
+          </p>
+        )}
       </aside>
     </article>
   )

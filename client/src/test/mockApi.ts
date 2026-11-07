@@ -18,6 +18,7 @@ export function makeIssue(overrides: Partial<Issue> = {}): Issue {
     repo: { fullName: 'acme/app', url: 'https://github.com/acme/app', stars: 12_345, pushedAt: new Date().toISOString() },
     score: 87.4,
     breakdown: { match: 0.74, labels: 1, difficulty: 1, freshness: 0.86, repo: 0.9 },
+    crowding: 1,
     ...overrides,
   }
 }

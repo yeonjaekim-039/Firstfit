@@ -12,6 +12,8 @@ export interface ScorableIssue {
   /** Repo metadata; null/undefined until fetched during ingest. */
   repoStars?: number | null;
   repoPushedAt?: Date | string | null;
+  /** Number of comments; long threads are penalised (see crowdingMultiplier). */
+  commentCount?: number | null;
 }
 
 export interface UserProfile {
@@ -36,6 +38,8 @@ export interface ScoredIssue<T extends ScorableIssue = ScorableIssue> {
   issue: T;
   score: number; // 0..100
   breakdown: ScoreBreakdown; // each component 0..1
+  /** Multiplier applied to the weighted score for busy threads: 1 = no penalty, down to CROWDING_FLOOR. */
+  crowding: number;
 }
 
 export const WEIGHTS: Readonly<ScoreBreakdown> = {
@@ -53,6 +57,16 @@ export const REPO_ACTIVITY_HALF_LIFE_DAYS = 90;
 
 /** Freshness halves every this many days since the issue was last updated. */
 export const FRESHNESS_HALF_LIFE_DAYS = 45;
+
+/**
+ * Busy threads usually mean an issue is contested, already being worked on, or stuck in
+ * debate: a poor first contribution. Up to CROWDING_FREE_COMMENTS there is no penalty
+ * (the 99th percentile of open issues is ~20 comments); beyond that the score is scaled
+ * down on a log scale, reaching CROWDING_FLOOR at CROWDING_FLOOR_COMMENTS and staying there.
+ */
+export const CROWDING_FREE_COMMENTS = 15;
+export const CROWDING_FLOOR_COMMENTS = 60;
+export const CROWDING_FLOOR = 0.7;
 
 const NEUTRAL = 0.5;
 const DAY_MS = 86_400_000;
@@ -154,6 +168,16 @@ export function repoQualityScore(
   return 0.6 * starPart + 0.4 * activityPart;
 }
 
+/** Score multiplier for comment count: 1 up to 15 comments, log-scaled down to 0.7 at 60+. */
+export function crowdingMultiplier(commentCount: number | null | undefined): number {
+  if (commentCount == null || commentCount <= CROWDING_FREE_COMMENTS) return 1;
+  const t = Math.min(
+    Math.log(commentCount / CROWDING_FREE_COMMENTS) / Math.log(CROWDING_FLOOR_COMMENTS / CROWDING_FREE_COMMENTS),
+    1,
+  );
+  return 1 - (1 - CROWDING_FLOOR) * t;
+}
+
 /** Scores one issue for a user. Returns null for issues that should not be recommended (assigned). */
 export function scoreIssue<T extends ScorableIssue>(
   issue: T,
@@ -173,7 +197,8 @@ export function scoreIssue<T extends ScorableIssue>(
     (sum, key) => sum + WEIGHTS[key] * breakdown[key],
     0,
   );
-  return { issue, score: Math.round(weighted * 1000) / 10, breakdown };
+  const crowding = crowdingMultiplier(issue.commentCount);
+  return { issue, score: Math.round(weighted * crowding * 1000) / 10, breakdown, crowding };
 }
 
 /** Scores, filters and sorts issues: best score first, then most recently updated, then id. */

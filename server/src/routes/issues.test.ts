@@ -53,9 +53,19 @@ describe('GET /api/issues', () => {
       repo: { fullName: 'django/admin', url: 'https://github.com/acme/app', stars: 80_000, pushedAt: NOW.toISOString() },
       breakdown: { match: 1, labels: 1, difficulty: 1, freshness: 1, repo: 1 },
       score: 100,
+      crowding: 1,
     });
     // Repos without fetched metadata serialize as null rather than being omitted.
     expect(res.body.items[1].repo).toMatchObject({ stars: null, pushedAt: null });
+  });
+
+  it('demotes issues with very long comment threads and reports the multiplier', async () => {
+    const { app } = setup([makeIssue({ id: 1, commentCount: 120 }), makeIssue({ id: 2, commentCount: 1 })]);
+    const res = await request(app).get('/api/issues');
+    expect(res.body.items.map((i: { id: number }) => i.id)).toEqual([2, 1]);
+    expect(res.body.items[0].crowding).toBe(1);
+    expect(res.body.items[1].crowding).toBe(0.7);
+    expect(res.body.items[1].score).toBeLessThan(res.body.items[0].score);
   });
 
   it('paginates the ranked list', async () => {
