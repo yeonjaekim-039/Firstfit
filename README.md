@@ -9,13 +9,14 @@ level; it ranks hundreds of thousands of beginner-friendly GitHub issues and exp
 
 | | |
 |---|---|
-| Open issues indexed | **362,852** across **122,039** repositories |
-| Served after filtering (unassigned, repo not archived) | **290,881** |
-| Labels crawled | `good first issue` (224,709) · `help wanted` (178,763) · `easy` (10,349) · `beginner` (2,697) · `first-timers-only` (573) |
-| Difficulty mix | 216,443 easy · 121,266 medium · 25,143 hard |
-| Tests | 186 (149 server, 37 client), run on every push |
+| Open issues indexed | **487,121** across **164,486** repositories |
+| Served after filtering (unassigned, repo not archived) | **392,721** |
+| Languages | Python 136,191 · TypeScript 101,279 · JavaScript 52,527 · Java 44,513 · Rust 35,623 · C++ 35,511 · Go 28,148 · C# 24,811 · PHP 17,521 · Ruby 10,997 |
+| Labels crawled | `good first issue` (282,119) · `help wanted` (253,528) · `easy` (13,857) · `beginner` (3,022) · `first-timers-only` (615) |
+| Difficulty mix | 272,785 easy · 179,199 medium · 35,137 hard |
+| Tests | 195 (157 server, 38 client), run on every push |
 
-<sub>Production database, November 6, 2026. Refreshed daily.</sub>
+<sub>Production database, November 7, 2026. Refreshed daily. An issue with several target labels counts once per label.</sub>
 
 ---
 
@@ -58,7 +59,7 @@ level; it ranks hundreds of thousands of beginner-friendly GitHub issues and exp
 
 Ranking is a pure, unit-tested function ([`server/src/domain/scoring.ts`](server/src/domain/scoring.ts)) with no I/O;
 the current time is passed in, so tests are deterministic. Each component is a number from 0 to 1; the score is the
-weighted sum × 100.
+weighted sum × 100, times a busy-thread multiplier (below) that is 1 for all but ~1–2% of issues.
 
 | Component | Weight | How it's computed |
 |---|---:|---|
@@ -70,6 +71,12 @@ weighted sum × 100.
 
 Anything you leave blank, and any repo whose metadata hasn't been fetched yet, scores a **neutral 0.5**
 rather than 0, so missing data neither buries nor boosts an issue. Ties break on most recently updated.
+
+**Busy threads are demoted.** A very long comment thread usually means an issue is contested, already being worked
+on, or stuck in debate, which makes it a poor first contribution. Up to 15 comments there's no penalty (the 99th
+percentile of open issues is about 20). Beyond that, the final score is multiplied by a factor that falls on a log scale
+to **×0.7 at 60+ comments** (×0.85 at 30). It's a multiplier rather than a sixth weight, so the components above are
+unchanged; the API returns it as `crowding`, and the card says when it applied.
 
 **Assigned issues are dropped**, and so are issues in **archived repositories**. The crawler skips repos
 already known to be archived, and every query (search, saved issues, the closed-issue sweep) filters them out.
@@ -165,7 +172,7 @@ Runs in three phases: **crawl → repo metadata → closed-issue sweep**.
 - **Rate limiting.** Requests are spaced to stay under the search limit (2.1 s apart with a token), and the client
   waits out `x-ratelimit-reset` / `retry-after` and retries on 403/429/5xx.
 - **Repo metadata over GraphQL.** Stars, last push and archived status are cached per repo, fetched with **50 aliased
-  `repository()` lookups per GraphQL request**. Refreshing ~120k repos takes about an hour instead of the days that
+  `repository()` lookups per GraphQL request**. Refreshing all 164k repos takes about two hours instead of the days that
   one REST call per repo would need under the rate limit. Metadata older than 7 days is refetched; deleted repos are
   marked archived.
 - **Closed-issue sweep.** Search only returns open issues, so an issue that disappears from results can't be told
@@ -257,8 +264,8 @@ the same commands for both packages on every push and pull request.
 
 ## Known limitations
 
-- **Language coverage is still filling in.** The index targets 10 languages. Python, TypeScript, JavaScript, Java and
-  Go are crawled; Rust, C#, C++, Ruby and PHP are being backfilled by the daily ingest.
+- **Fixed coverage.** Only 10 languages and 5 beginner labels are crawled. Projects that use other labels
+  (`good-first-bug`, `low-hanging-fruit`…) or other languages aren't indexed.
 - **"Language" is the queried language, not the repo's.** Search results don't include a repo's language, so an issue
   is tagged with the language filter that found it.
 - **Skill matching is lexical.** It looks for whole-token matches in titles, labels and repo names. It doesn't read
@@ -267,6 +274,7 @@ the same commands for both packages on every push and pull request.
   actual work.
 - **Only the 5,000 most recently updated matches are ranked.** Broad searches never surface older issues.
 - **"Unassigned" isn't "unclaimed."** Someone may have said "I'll take this" in a comment without being assigned.
+  The busy-thread penalty catches some of these, but comments aren't read.
 - **Data is up to a day old.** A closed issue can stay listed until the next sweep, which re-checks up to 3,000 issues
   per run and carries the rest over.
 - **Single server.** One VPS, no replica or automated off-site backup. Sessions are stateless, so signing out
