@@ -21,9 +21,21 @@ level; it ranks hundreds of thousands of beginner-friendly GitHub issues and exp
 
 ## Screenshots
 
-| Discover | My Dashboard | Mobile |
-|---|---|---|
-| ![Discover page: profile, filters and ranked issues with score breakdowns](docs/screenshots/discover.png) | ![Dashboard with saved issues](docs/screenshots/dashboard.png) | ![Mobile layout with the collapsible filter panel](docs/screenshots/mobile.png) |
+**Discover:** your profile and filters on the left, ranked issues with a five-part score breakdown on the right.
+
+![Discover page: profile, filters and ranked issues with score breakdowns](docs/screenshots/discover.png)
+
+**My Dashboard:** saved issues, re-scored against your saved matching profile.
+
+![My Dashboard with saved issues and the matching profile](docs/screenshots/dashboard.png)
+
+**Mobile:** results stack in a single column with the score below each card; filters fold into a "Profile & filters" panel.
+
+<p>
+  <img src="docs/screenshots/Mobile_discover.png" alt="Mobile: ranked results with score breakdown below each card" width="300">
+  &nbsp;
+  <img src="docs/screenshots/Mobile_dashboard.png" alt="Mobile: the collapsible Profile and filters panel, open" width="300">
+</p>
 
 ---
 
