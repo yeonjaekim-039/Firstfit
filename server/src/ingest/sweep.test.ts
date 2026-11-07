@@ -58,4 +58,9 @@ describe('reconcile', () => {
       updatedAt: '2026-10-01T00:00:00Z',
     });
   });
+
+  it('strips NUL characters from refreshed titles and labels', () => {
+    const r = reconcile(stored, fetched({ title: 'a\u0000b', labels: [{ name: 'good first issue\u0000' }] }), LABELS);
+    expect(r).toMatchObject({ action: 'refresh', title: 'ab', labels: ['good first issue'] });
+  });
 });

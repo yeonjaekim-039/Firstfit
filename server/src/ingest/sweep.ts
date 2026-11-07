@@ -2,7 +2,7 @@ import type pg from 'pg';
 import type { Difficulty } from '../domain/types.js';
 import { computeDifficulty } from './difficulty.js';
 import type { GitHubIssue } from './github.js';
-import { parseRepoUrl } from './mapIssue.js';
+import { normalizeLabels, parseRepoUrl, pgText } from './mapIssue.js';
 
 /** Issues still marked open that the latest crawl did not return. */
 export interface StaleIssue {
@@ -43,18 +43,16 @@ export function reconcile(stored: StaleIssue, fetched: GitHubIssue | null, targe
 
   if (fetched.state !== 'open') return { action: 'close', reason: 'closed' };
 
-  const labels = [
-    ...new Set(fetched.labels.map((l) => (typeof l === 'string' ? l : l.name).toLowerCase().trim())),
-  ].filter(Boolean);
+  const labels = normalizeLabels(fetched.labels);
   const targets = new Set(targetLabels.map((l) => l.toLowerCase()));
   if (!labels.some((l) => targets.has(l))) return { action: 'delist' };
 
   const bodyLength = fetched.body?.length ?? 0;
   return {
     action: 'refresh',
-    title: fetched.title,
+    title: pgText(fetched.title),
     labels,
-    assignee: fetched.assignee?.login ?? null,
+    assignee: fetched.assignee ? pgText(fetched.assignee.login) : null,
     commentCount: fetched.comments,
     bodyLength,
     difficulty: computeDifficulty({ labels, commentCount: fetched.comments, bodyLength }),

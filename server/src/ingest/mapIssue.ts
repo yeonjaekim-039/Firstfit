@@ -27,6 +27,22 @@ export interface IssueRow {
   updatedAt: string;
 }
 
+/**
+ * Postgres TEXT cannot hold NUL (U+0000): one in any parameter fails the whole multi-row
+ * INSERT with "invalid byte sequence for encoding UTF8: 0x00". GitHub allows NUL in issue
+ * titles and label names, so strip it from every string we store.
+ */
+export function pgText(value: string): string {
+  return value.replaceAll('\u0000', '');
+}
+
+/** Lowercased, trimmed, NUL-free, de-duplicated label names (empty ones dropped). */
+export function normalizeLabels(labels: GitHubSearchIssue['labels']): string[] {
+  return [
+    ...new Set(labels.map((l) => pgText(typeof l === 'string' ? l : l.name).toLowerCase().trim())),
+  ].filter(Boolean);
+}
+
 export function parseRepoUrl(repositoryUrl: string): { owner: string; name: string } {
   const match = /\/repos\/([^/]+)\/([^/]+)\/?$/.exec(repositoryUrl);
   if (!match) throw new Error(`Unexpected repository_url: ${repositoryUrl}`);
@@ -36,9 +52,7 @@ export function parseRepoUrl(repositoryUrl: string): { owner: string; name: stri
 export function mapIssue(item: GitHubSearchIssue, language: string): { repo: RepoRow; issue: IssueRow } {
   const { owner, name } = parseRepoUrl(item.repository_url);
   const fullName = `${owner}/${name}`;
-  const labels = [
-    ...new Set(item.labels.map((l) => (typeof l === 'string' ? l : l.name).toLowerCase().trim())),
-  ].filter(Boolean);
+  const labels = normalizeLabels(item.labels);
   const bodyLength = item.body?.length ?? 0;
 
   return {
@@ -47,14 +61,14 @@ export function mapIssue(item: GitHubSearchIssue, language: string): { repo: Rep
       id: item.id,
       repoFullName: fullName,
       number: item.number,
-      title: item.title,
+      title: pgText(item.title),
       url: item.html_url,
       bodyLength,
       labels,
       language,
       commentCount: item.comments,
       state: item.state,
-      assignee: item.assignee?.login ?? null,
+      assignee: item.assignee ? pgText(item.assignee.login) : null,
       difficulty: computeDifficulty({ labels, commentCount: item.comments, bodyLength }),
       createdAt: item.created_at,
       updatedAt: item.updated_at,

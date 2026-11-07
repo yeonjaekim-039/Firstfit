@@ -39,6 +39,16 @@ describe('mapIssue', () => {
     });
   });
 
+  it('strips NUL characters, which Postgres TEXT rejects, from the title and labels', () => {
+    const { issue } = mapIssue(
+      { ...item, title: 'Crash on \u0000 in input', labels: [{ name: 'bug\u0000' }, { name: 'Good First Issue' }, 'bug'] },
+      'Ruby',
+    );
+    expect(issue.title).toBe('Crash on  in input');
+    expect(issue.labels).toEqual(['bug', 'good first issue']);
+    expect(JSON.stringify(issue)).not.toContain('\\u0000');
+  });
+
   it('records the assignee login and tolerates a null body', () => {
     const { issue } = mapIssue({ ...item, body: null, assignee: { login: 'octocat' } }, 'Go');
     expect(issue.assignee).toBe('octocat');
