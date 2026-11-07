@@ -98,6 +98,12 @@ jobs:
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Fail fast with a clear message if the secret isn't a usable private key
+          # (e.g. the .pub file, or BEGIN/END lines or line breaks lost when pasting).
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then
+            echo "::error title=Invalid DEPLOY_SSH_KEY::The DEPLOY_SSH_KEY secret is not a valid unencrypted private key. Re-paste the whole private key file, from '-----BEGIN OPENSSH PRIVATE KEY-----' to '-----END OPENSSH PRIVATE KEY-----'."
+            exit 1
+          fi
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
       # The deploy key is pinned to a forced command (deploy/deploy-gate.sh on the server)
       # that only accepts `deploy <sha>` and fetches the deploy files for that commit itself.
