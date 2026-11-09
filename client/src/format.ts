@@ -6,6 +6,26 @@ export function formatCount(n: number): string {
   return String(n)
 }
 
+/**
+ * Returns the URL only if it is absolute http(s); otherwise undefined. Use for links whose
+ * value came from untrusted content (blog feeds), so a `javascript:` or `data:` URL can never
+ * reach an href, even if the server-side checks were bypassed.
+ */
+export function safeHttpUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'https:' || protocol === 'http:' ? url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** "2026-11-05T20:23:21Z" -> "Nov 5, 2026" (UTC, so it doesn't shift by time zone). */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
 export function timeAgo(iso: string, now = Date.now()): string {
   const s = Math.max(0, (now - new Date(iso).getTime()) / 1000)
   const units: [number, string][] = [

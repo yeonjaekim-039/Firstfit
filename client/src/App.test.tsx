@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { readQuery } from './pages/discoverQuery'
-import { makeIssue, META, mockApi, page, testUser } from './test/mockApi'
+import { blogsPage, makeIssue, makePost, META, mockApi, page, testUser } from './test/mockApi'
 
 const renderAt = (path: string) =>
   render(
@@ -131,6 +131,47 @@ describe('Dashboard', () => {
     expect(await screen.findByText('Saved ✓')).toBeInTheDocument()
     const put = fetch.mock.calls.find(([u]) => u === '/api/me/profile')!
     expect(JSON.parse(String(put[1]!.body))).toEqual({ skills: ['react'], preferredLanguages: ['TypeScript'], difficulty: 'hard' })
+  })
+})
+
+describe('Tech Blogs page', () => {
+  const blogsCall = (fetch: ReturnType<typeof mockApi>) =>
+    fetch.mock.calls
+      .map(([u]) => new URL(String(u), 'http://x'))
+      .filter((u) => u.pathname === '/api/blogs')
+      .at(-1)!
+
+  it('is reachable from the nav and lists posts ranked for the URL profile', async () => {
+    const fetch = mockApi({
+      ...signedOut,
+      'GET /api/blogs': () => ({ body: blogsPage([makePost({ id: 1, title: 'Rust at the edge' })]) }),
+    })
+    renderAt('/blogs?skills=rust&langs=Go')
+    expect(await screen.findByRole('link', { name: 'Rust at the edge' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tech Blogs' })).toHaveAttribute('href', '/blogs')
+    expect(screen.getByText('1 post from company engineering blogs')).toBeInTheDocument()
+    expect(Object.fromEntries(blogsCall(fetch).searchParams)).toMatchObject({ skills: 'rust', preferredLanguages: 'Go' })
+  })
+
+  it('filters by company', async () => {
+    const fetch = mockApi({ ...signedOut, 'GET /api/blogs': () => ({ body: blogsPage([makePost()]) }) })
+    renderAt('/blogs')
+    await screen.findByRole('link', { name: 'Post 1' })
+    await userEvent.click(within(screen.getByRole('group', { name: 'Company' })).getByRole('button', { name: 'Netflix' }))
+    await waitFor(() => expect(blogsCall(fetch).searchParams.get('company')).toBe('Netflix'))
+  })
+
+  it("ranks by a signed-in user's saved skills and languages", async () => {
+    const fetch = mockApi({ ...signedIn(), 'GET /api/blogs': () => ({ body: blogsPage([]) }) })
+    renderAt('/blogs')
+    await screen.findByText(/no posts yet/i)
+    await waitFor(() =>
+      expect(Object.fromEntries(blogsCall(fetch).searchParams)).toMatchObject({
+        skills: 'react',
+        preferredLanguages: 'TypeScript',
+        level: 'easy',
+      }),
+    )
   })
 })
 

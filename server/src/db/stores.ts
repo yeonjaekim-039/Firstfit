@@ -2,6 +2,9 @@ import type pg from 'pg';
 import type { GitHubProfile } from '../auth/githubOAuth.js';
 import type { ScorableIssue, UserProfile } from '../domain/scoring.js';
 import type { Difficulty } from '../domain/types.js';
+import type { ParsedPost } from '../blogs/feed.js';
+import type { BlogIngestStore, BlogSource } from '../blogs/ingest.js';
+import { isRowDataError, placeholders } from '../ingest/upsert.js';
 
 export interface IssueRecord extends ScorableIssue {
   number: number;
@@ -18,6 +21,8 @@ export interface IssueFilters {
   languages?: string[];
   labels?: string[];
   difficulties?: Difficulty[];
+  /** "owner/repo" names, matched case-insensitively. */
+  repos?: string[];
 }
 
 export interface CandidateResult {
@@ -123,6 +128,7 @@ export function createIssueStore(pool: pg.Pool): IssueStore {
       if (filters.languages?.length) add((p) => `lower(i.language) = ANY(${p})`, filters.languages.map((l) => l.toLowerCase()));
       if (filters.labels?.length) add((p) => `i.labels && ${p}::text[]`, filters.labels.map((l) => l.toLowerCase()));
       if (filters.difficulties?.length) add((p) => `i.difficulty = ANY(${p}::difficulty_level[])`, filters.difficulties);
+      if (filters.repos?.length) add((p) => `lower(r.full_name) = ANY(${p}::text[])`, filters.repos.map((r) => r.toLowerCase()));
       params.push(limit);
 
       const { rows } = await pool.query<IssueRow & { total: string }>(
@@ -259,6 +265,172 @@ export function createSavedStore(pool: pg.Pool): SavedStore {
 
     async remove(userId, issueId) {
       await pool.query('DELETE FROM saved_issues WHERE user_id = $1 AND issue_id = $2', [userId, issueId]);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Company engineering blogs
+
+export interface BlogPostRecord {
+  id: number;
+  company: string;
+  title: string;
+  url: string;
+  publishedAt: Date | null;
+  excerpt: string;
+  tags: string[];
+  /** Lowercased "owner/repo" names mentioned in the post. */
+  repos: string[];
+}
+
+export interface BlogStore {
+  /** Posts from active sources, newest first, optionally limited to some companies. */
+  findPosts(filters: { companies?: string[] }, limit: number): Promise<{ rows: BlogPostRecord[]; total: number }>;
+  /** Companies with an active source and at least one post, alphabetically. */
+  companies(): Promise<string[]>;
+  /** Posts (newest first) that mention any of these repos (case-insensitive). */
+  relatedByRepos(repos: string[], limit: number): Promise<BlogPostRecord[]>;
+}
+
+const POST_COLUMNS = `p.id, s.company, p.title, p.url, p.published_at, p.excerpt, p.tags, p.repos`;
+
+interface PostRow {
+  id: string;
+  company: string;
+  title: string;
+  url: string;
+  published_at: Date | null;
+  excerpt: string;
+  tags: string[];
+  repos: string[];
+}
+
+const toPostRecord = (r: PostRow): BlogPostRecord => ({
+  id: Number(r.id),
+  company: r.company,
+  title: r.title,
+  url: r.url,
+  publishedAt: r.published_at,
+  excerpt: r.excerpt,
+  tags: r.tags,
+  repos: r.repos,
+});
+
+export function createBlogStore(
+  pool: Pick<pg.Pool, 'query'>,
+  log: (msg: string) => void = console.warn,
+): BlogStore & BlogIngestStore {
+  /** One multi-row upsert; returns how many rows were inserted vs. changed. */
+  const writePosts = async (sourceId: number, posts: ParsedPost[]) => {
+    const params = posts.flatMap((p) => [sourceId, p.url, p.title, p.publishedAt, p.excerpt, p.tags, p.repos]);
+    // A post already stored under another source (cross-posted) keeps its original source.
+    // Unchanged rows are skipped by the WHERE, so `updated` counts real changes only.
+    const { rows } = await pool.query<{ inserted: boolean }>(
+      `INSERT INTO blog_posts (source_id, url, title, published_at, excerpt, tags, repos)
+       VALUES ${placeholders(posts.length, 7)}
+       ON CONFLICT (url) DO UPDATE
+         SET title = EXCLUDED.title,
+             published_at = COALESCE(EXCLUDED.published_at, blog_posts.published_at),
+             excerpt = EXCLUDED.excerpt,
+             tags = EXCLUDED.tags,
+             repos = EXCLUDED.repos,
+             updated_at = now()
+       WHERE (blog_posts.title, blog_posts.excerpt, blog_posts.tags, blog_posts.repos, blog_posts.published_at)
+             IS DISTINCT FROM
+             (EXCLUDED.title, EXCLUDED.excerpt, EXCLUDED.tags, EXCLUDED.repos,
+              COALESCE(EXCLUDED.published_at, blog_posts.published_at))
+       RETURNING (xmax = 0) AS inserted`,
+      params,
+    );
+    const inserted = rows.filter((r) => r.inserted).length;
+    return { inserted, updated: rows.length - inserted };
+  };
+
+  return {
+    async findPosts(filters, limit) {
+      const params: unknown[] = [];
+      const where = ['s.active'];
+      if (filters.companies?.length) {
+        params.push(filters.companies.map((c) => c.toLowerCase()));
+        where.push(`lower(s.company) = ANY($${params.length}::text[])`);
+      }
+      params.push(limit);
+      const { rows } = await pool.query<PostRow & { total: string }>(
+        `SELECT ${POST_COLUMNS}, count(*) OVER () AS total
+           FROM blog_posts p JOIN blog_sources s ON s.id = p.source_id
+          WHERE ${where.join(' AND ')}
+          ORDER BY p.published_at DESC NULLS LAST, p.id DESC
+          LIMIT $${params.length}`,
+        params,
+      );
+      return { total: rows.length ? Number(rows[0]!.total) : 0, rows: rows.map(toPostRecord) };
+    },
+
+    async companies() {
+      const { rows } = await pool.query<{ company: string }>(
+        `SELECT DISTINCT s.company FROM blog_sources s
+          WHERE s.active AND EXISTS (SELECT 1 FROM blog_posts p WHERE p.source_id = s.id)
+          ORDER BY s.company`,
+      );
+      return rows.map((r) => r.company);
+    },
+
+    async relatedByRepos(repos, limit) {
+      if (repos.length === 0) return [];
+      const { rows } = await pool.query<PostRow>(
+        `SELECT ${POST_COLUMNS}
+           FROM blog_posts p JOIN blog_sources s ON s.id = p.source_id
+          WHERE s.active AND p.repos && $1::text[]
+          ORDER BY p.published_at DESC NULLS LAST, p.id DESC
+          LIMIT $2`,
+        [repos.map((r) => r.toLowerCase()), limit],
+      );
+      return rows.map(toPostRecord);
+    },
+
+    async activeSources(): Promise<BlogSource[]> {
+      const { rows } = await pool.query<{ id: number; company: string; feed_url: string }>(
+        'SELECT id, company, feed_url FROM blog_sources WHERE active ORDER BY id',
+      );
+      return rows.map((r) => ({ id: r.id, company: r.company, feedUrl: r.feed_url }));
+    },
+
+    async upsertPosts(sourceId: number, posts: ParsedPost[]) {
+      // Text is cleaned (NUL removed) by the pool's CleaningClient, like every other write.
+      // parseFeed already de-duplicates; repeat defensively, since a duplicate URL within one
+      // INSERT ... ON CONFLICT DO UPDATE is an error in Postgres.
+      const unique = [...new Map(posts.map((p) => [p.url, p])).values()];
+      if (unique.length === 0) return { inserted: 0, updated: 0, skipped: 0 };
+      try {
+        return { ...(await writePosts(sourceId, unique)), skipped: 0 };
+      } catch (err) {
+        if (!isRowDataError(err)) throw err;
+      }
+      // Same rule as the issue crawl: a post whose own data is rejected is logged and skipped;
+      // the rest of the feed is still saved.
+      const total = { inserted: 0, updated: 0, skipped: 0 };
+      for (const post of unique) {
+        try {
+          const r = await writePosts(sourceId, [post]);
+          total.inserted += r.inserted;
+          total.updated += r.updated;
+        } catch (err) {
+          if (!isRowDataError(err)) throw err;
+          total.skipped++;
+          const e = err as { code?: string; message?: string };
+          log(`Skipped blog post ${post.url}: ${e.code}: ${e.message}`);
+        }
+      }
+      return total;
+    },
+
+    async markFetched(sourceId: number, error: string | null) {
+      if (error === null) {
+        await pool.query('UPDATE blog_sources SET last_fetched_at = now(), last_error = NULL WHERE id = $1', [sourceId]);
+      } else {
+        await pool.query('UPDATE blog_sources SET last_error = $2 WHERE id = $1', [sourceId, error]);
+      }
     },
   };
 }

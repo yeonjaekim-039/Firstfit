@@ -1,23 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import type { IssueStore, UserStore } from '../db/stores.js';
+import type { BlogStore, IssueStore, UserStore } from '../db/stores.js';
 import { diversifyByRepo } from '../domain/diversity.js';
-import { rankIssues, type UserProfile } from '../domain/scoring.js';
+import { rankIssues } from '../domain/scoring.js';
 import { DIFFICULTIES } from '../domain/types.js';
 import { toIssueDto } from './dto.js';
+import { list, resolveProfile } from './params.js';
+import { relatedPostsByRepo } from './related.js';
 
 /** How many filtered issues (most recently updated first) are pulled from the DB and ranked. */
 export const MAX_CANDIDATES = 5000;
-
-/** Accepts `?x=a,b`, `?x=a&x=b`, or a mix; trims and drops blanks. */
-const list = <T extends z.ZodType<string, string>>(item: T) =>
-  z
-    .union([z.string(), z.array(z.string())])
-    .optional()
-    .transform((v) =>
-      v === undefined ? undefined : [v].flat().flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean),
-    )
-    .pipe(z.array(item).optional());
 
 const difficulty = z.enum(DIFFICULTIES);
 
@@ -37,7 +29,12 @@ export const issuesQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStore; now?: () => Date }) {
+export function issuesRouter(deps: {
+  issueStore: IssueStore;
+  userStore: UserStore;
+  blogStore: BlogStore;
+  now?: () => Date;
+}) {
   const router = Router();
   const now = deps.now ?? (() => new Date());
 
@@ -49,20 +46,11 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
     }
     const q = parsed.data;
 
-    let stored: UserProfile | null = null;
-    if (q.userId !== undefined) {
-      stored = await deps.userStore.getProfile(q.userId);
-      if (!stored) {
-        res.status(404).json({ error: `User ${q.userId} not found` });
-        return;
-      }
+    const profile = await resolveProfile(q, deps.userStore);
+    if (!profile) {
+      res.status(404).json({ error: `User ${q.userId} not found` });
+      return;
     }
-    const profile: UserProfile = {
-      skills: q.skills ?? stored?.skills ?? [],
-      preferredLanguages: q.preferredLanguages ?? stored?.preferredLanguages ?? [],
-      difficulty: q.level ?? stored?.difficulty ?? null,
-      preferredLabels: q.preferredLabels ?? [],
-    };
 
     const { rows, total } = await deps.issueStore.findCandidates(
       { languages: q.language, labels: q.label, difficulties: q.difficulty },
@@ -71,6 +59,11 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
     // Diversify over the whole ranked list (not just this page) so page boundaries stay stable.
     const ranked = diversifyByRepo(rankIssues(rows, profile, now()), (s) => s.issue.repoFullName, q.pageSize);
     const start = (q.page - 1) * q.pageSize;
+    const pageItems = ranked.slice(start, start + q.pageSize);
+    const related = await relatedPostsByRepo(
+      deps.blogStore,
+      pageItems.map((s) => s.issue.repoFullName),
+    );
 
     res.json({
       page: q.page,
@@ -79,7 +72,7 @@ export function issuesRouter(deps: { issueStore: IssueStore; userStore: UserStor
       rankedCount: ranked.length,
       totalPages: Math.ceil(ranked.length / q.pageSize),
       profile,
-      items: ranked.slice(start, start + q.pageSize).map(toIssueDto),
+      items: pageItems.map((s) => toIssueDto(s, related.get(s.issue.repoFullName.toLowerCase()) ?? [])),
     });
   });
 

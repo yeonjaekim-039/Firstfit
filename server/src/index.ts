@@ -4,7 +4,7 @@ import { createGitHubOAuth } from './auth/githubOAuth.js';
 import { createSessionCodec } from './auth/session.js';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
-import { createIssueStore, createSavedStore, createUserStore } from './db/stores.js';
+import { createBlogStore, createIssueStore, createSavedStore, createUserStore } from './db/stores.js';
 
 let sessionSecret = config.sessionSecret;
 if (!sessionSecret) {
@@ -22,6 +22,7 @@ const app = createApp({
   issueStore: createIssueStore(pool),
   userStore: createUserStore(pool),
   savedStore: createSavedStore(pool),
+  blogStore: createBlogStore(pool),
   auth: { sessions: createSessionCodec(sessionSecret), oauth, clientUrl: config.clientUrl },
 });
 

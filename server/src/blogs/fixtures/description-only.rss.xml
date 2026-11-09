@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<!-- Sample modelled on a summary-only feed (e.g. stripe.com/blog/feed.rss): plain-text <description>, no article body. Text is synthetic. -->
+<channel>
+  <title>Example Payments Blog</title>
+  <link>https://payments.example.com/blog</link>
+  <item>
+    <title>Analyze your payments data directly with your agent</title>
+    <link>https://payments.example.com/blog/analyze-your-data-with-your-agent</link>
+    <description>You can now use natural language to build a report on your payments, billing and fraud trends, straight from your data.</description>
+    <pubDate>Thu, 05 Nov 2026 00:00:00 +0000</pubDate>
+    <guid>https://payments.example.com/blog/analyze-your-data-with-your-agent</guid>
+    <dc:date>2026-11-05T00:00:00+00:00</dc:date>
+  </item>
+  <item>
+    <title>An item with an unparseable date</title>
+    <link>https://payments.example.com/blog/no-date</link>
+    <description>Short.</description>
+    <pubDate>sometime last week</pubDate>
+  </item>
+</channel>
+</rss>

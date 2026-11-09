@@ -2,6 +2,8 @@ import type { GitHubOAuth } from '../auth/githubOAuth.js';
 import { createSessionCodec, SESSION_COOKIE } from '../auth/session.js';
 import type { AppDeps } from '../app.js';
 import type {
+  BlogPostRecord,
+  BlogStore,
   IssueFilters,
   IssueRecord,
   IssueStore,
@@ -138,11 +140,50 @@ export function fakeOAuth(overrides: Partial<GitHubOAuth> = {}): GitHubOAuth {
   };
 }
 
+export function makePost(overrides: Partial<BlogPostRecord> = {}): BlogPostRecord {
+  const id = overrides.id ?? 1;
+  return {
+    id,
+    company: 'Acme',
+    title: `Post ${id}`,
+    url: `https://eng.acme.test/posts/${id}`,
+    publishedAt: NOW,
+    excerpt: 'A short excerpt.',
+    tags: [],
+    repos: [],
+    ...overrides,
+  };
+}
+
+/** In-memory blog store; honours the company filter and repo overlap like the pg version. */
+export function fakeBlogStore(posts: BlogPostRecord[] = [], options: { failRelated?: boolean } = {}) {
+  const byNewest = [...posts].sort(
+    (a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0) || b.id - a.id,
+  );
+  const store: BlogStore = {
+    async findPosts(filters, limit) {
+      const wanted = filters.companies?.map((c) => c.toLowerCase());
+      const rows = byNewest.filter((p) => !wanted?.length || wanted.includes(p.company.toLowerCase()));
+      return { rows: rows.slice(0, limit), total: rows.length };
+    },
+    async companies() {
+      return [...new Set(posts.map((p) => p.company))].sort();
+    },
+    async relatedByRepos(repos, limit) {
+      if (options.failRelated) throw new Error('blog store down');
+      const wanted = new Set(repos.map((r) => r.toLowerCase()));
+      return byNewest.filter((p) => p.repos.some((r) => wanted.has(r))).slice(0, limit);
+    },
+  };
+  return store;
+}
+
 export function makeDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     issueStore: fakeIssueStore([]).store,
     userStore: fakeUserStore(),
     savedStore: fakeSavedStore().store,
+    blogStore: fakeBlogStore(),
     auth: { sessions, oauth: fakeOAuth(), clientUrl: 'http://localhost:5173' },
     now: () => NOW,
     ...overrides,

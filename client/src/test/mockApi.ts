@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { Issue, User } from '../api'
+import type { BlogPost, BlogsPage, Issue, User } from '../api'
 
 export function makeIssue(overrides: Partial<Issue> = {}): Issue {
   const id = overrides.id ?? 1
@@ -19,6 +19,7 @@ export function makeIssue(overrides: Partial<Issue> = {}): Issue {
     score: 87.4,
     breakdown: { match: 0.74, labels: 1, difficulty: 1, freshness: 0.86, repo: 0.9 },
     crowding: 1,
+    relatedPosts: [],
     ...overrides,
   }
 }
@@ -64,5 +65,32 @@ export const page = (items: Issue[]) => ({
   total: items.length,
   rankedCount: items.length,
   totalPages: 1,
+  items,
+})
+
+export function makePost(overrides: Partial<BlogPost> = {}): BlogPost {
+  const id = overrides.id ?? 1
+  return {
+    id,
+    company: 'Cloudflare',
+    title: `Post ${id}`,
+    url: `https://blog.example.test/posts/${id}`,
+    publishedAt: '2026-11-05T20:23:21Z',
+    excerpt: 'How we built it.',
+    tags: ['rust'],
+    repos: [],
+    score: 71.2,
+    breakdown: { match: 0.7, freshness: 0.9 },
+    issues: [],
+    ...overrides,
+  }
+}
+
+export const blogsPage = (items: BlogPost[], companies = ['Cloudflare', 'GitHub', 'Netflix']): BlogsPage => ({
+  page: 1,
+  pageSize: 20,
+  total: items.length,
+  totalPages: 1,
+  companies,
   items,
 })

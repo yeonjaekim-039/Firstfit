@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { makeIssue } from '../test/mockApi'
-import { formatCount, timeAgo } from '../format'
+import { formatCount, safeHttpUrl, timeAgo } from '../format'
 import { IssueCard } from './IssueCard'
 
 describe('IssueCard', () => {
@@ -62,9 +62,60 @@ describe('IssueCard', () => {
     expect(screen.getByRole('link', { name: /sign in to save/i })).toHaveAttribute('href', '/api/auth/github')
   })
 
+  it('shows related blog posts only when there are some', () => {
+    const { unmount } = render(<IssueCard issue={issue} />)
+    expect(screen.queryByRole('list', { name: 'Related blog posts' })).toBeNull()
+    unmount()
+    render(
+      <IssueCard
+        issue={makeIssue({
+          relatedPosts: [
+            { id: 1, company: 'Cloudflare', title: 'Inside workerd', url: 'https://blog.example.test/workerd', publishedAt: null },
+          ],
+        })}
+      />,
+    )
+    const related = screen.getByRole('list', { name: 'Related blog posts' })
+    expect(within(related).getByRole('link', { name: 'Inside workerd' })).toHaveAttribute('href', 'https://blog.example.test/workerd')
+    expect(within(related).getByText('· Cloudflare')).toBeInTheDocument()
+  })
+
+  it('drops related posts whose URL is not http(s)', () => {
+    render(
+      <IssueCard
+        issue={makeIssue({
+          relatedPosts: [
+            { id: 1, company: 'Evil', title: 'Hostile', url: 'javascript:alert(1)', publishedAt: null },
+            { id: 2, company: 'Good', title: 'Fine', url: 'https://blog.example.test/ok', publishedAt: null },
+          ],
+        })}
+      />,
+    )
+    const related = screen.getByRole('list', { name: 'Related blog posts' })
+    expect(within(related).queryByText('Hostile')).toBeNull()
+    expect(within(related).getByRole('link', { name: 'Fine' })).toHaveAttribute('href', 'https://blog.example.test/ok')
+  })
+
   it('mentions an assignee when present', () => {
     render(<IssueCard issue={makeIssue({ assignee: 'someone' })} />)
     expect(screen.getByText(/assigned to someone/)).toBeInTheDocument()
+  })
+})
+
+describe('safeHttpUrl', () => {
+  it.each([
+    ['https://a.test/x', 'https://a.test/x'],
+    ['http://a.test/x', 'http://a.test/x'],
+    ['javascript:alert(1)', undefined],
+    ['JAVASCRIPT:alert(1)', undefined],
+    ['java\tscript:alert(1)', undefined],
+    ['data:text/html,x', undefined],
+    ['vbscript:x', undefined],
+    ['/relative', undefined],
+    ['', undefined],
+    [null, undefined],
+  ])('%j -> %j', (input, expected) => {
+    expect(safeHttpUrl(input)).toBe(expected)
   })
 })
 

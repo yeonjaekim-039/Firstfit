@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:cc="http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html">
+<!-- Sample modelled on a Medium publication feed (e.g. netflixtechblog.com/feed): no <description>, full article in content:encoded, tracking params on links. Text is synthetic. -->
+<channel>
+  <title><![CDATA[Example Tech Blog - Medium]]></title>
+  <link>https://techblog.example.com?source=rss----abc123---4</link>
+  <item>
+    <title><![CDATA[Scaling our Python data pipelines with Kafka]]></title>
+    <link>https://techblog.example.com/scaling-python-pipelines-6b0811a1c015?source=rss----abc123---4</link>
+    <guid isPermaLink="false">https://medium.com/p/6b0811a1c015</guid>
+    <category><![CDATA[data-engineering]]></category>
+    <category><![CDATA[python]]></category>
+    <dc:creator><![CDATA[Example Technology Blog]]></dc:creator>
+    <pubDate>Mon, 26 Oct 2026 17:04:57 GMT</pubDate>
+    <atom:updated>2026-10-26T17:04:58.324Z</atom:updated>
+    <content:encoded><![CDATA[<p>By <a href="https://www.linkedin.com/in/someone">Jane Doe</a>, <a href="https://www.linkedin.com/in/other">Sam Roe</a> and Alex Poe</p><h3>Why we rebuilt it</h3><p>Our streaming platform moves billions of events a day through Kafka. This post explains how we rewrote the consumers in Python, cut end-to-end latency in half, and open-sourced the tooling at <a href="https://github.com/Example-OSS/stream-kit">github.com/Example-OSS/stream-kit</a>. The work builds on <a href="https://github.com/apache/kafka/pull/12345">an upstream Kafka change</a> and <a href="https://github.com/confluentinc/confluent-kafka-python.git">confluent-kafka-python</a>.</p><figure><img src="https://cdn-images.example.com/chart.png" alt="latency chart"/><figcaption>Latency before and after</figcaption></figure><p>We also tried <a href="https://github.com/features/actions">GitHub Actions</a> for CI and filed feedback via <a href="https://github.com/orgs/Example-OSS/discussions">our org discussions</a>.</p><pre><code>consumer.poll(timeout=1.0)</code></pre><p>The new pipeline is written in Python and deployed on Kubernetes. More Python details below, plus notes on Kafka partitioning and data pipelines in general.</p><img src="https://medium.com/_/stat?event=post.clientViewed" width="1" height="1" alt="">]]></content:encoded>
+  </item>
+  <item>
+    <title><![CDATA[Scaling our Python data pipelines with Kafka]]></title>
+    <link>https://www.techblog.example.com/scaling-python-pipelines-6b0811a1c015?utm_source=newsletter&amp;utm_medium=email#comments</link>
+    <guid isPermaLink="false">https://medium.com/p/6b0811a1c015-dup</guid>
+    <pubDate>Mon, 26 Oct 2026 17:04:57 GMT</pubDate>
+    <content:encoded><![CDATA[<p>Duplicate listing of the same article with tracking parameters.</p>]]></content:encoded>
+  </item>
+  <item>
+    <title><![CDATA[Hostile item: javascript link]]></title>
+    <link>javascript:alert(document.cookie)</link>
+    <guid isPermaLink="true">JavaScript:alert(1)</guid>
+    <content:encoded><![CDATA[<p>Must never become a post.</p>]]></content:encoded>
+  </item>
+  <item>
+    <title><![CDATA[Hostile item: obfuscated javascript link]]></title>
+    <link>  java&#9;script:alert(1)</link>
+    <content:encoded><![CDATA[<p>Tab-split scheme; URL parsers strip the tab.</p>]]></content:encoded>
+  </item>
+  <item>
+    <title><![CDATA[Hostile item: data URL]]></title>
+    <link>data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==</link>
+    <guid isPermaLink="true">vbscript:msgbox(1)</guid>
+  </item>
+  <item>
+    <title><![CDATA[Relative link]]></title>
+    <link>/relative/path</link>
+  </item>
+  <item>
+    <title><![CDATA[Untitled draft without a link]]></title>
+    <guid isPermaLink="false">not-a-url-guid</guid>
+    <content:encoded><![CDATA[<p>No link and a non-URL guid: skipped.</p>]]></content:encoded>
+  </item>
+</channel>
+</rss>

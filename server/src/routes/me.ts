@@ -1,9 +1,10 @@
 import { type RequestHandler, Router } from 'express';
 import { z } from 'zod';
-import type { SavedStore, UserStore } from '../db/stores.js';
+import type { BlogStore, SavedStore, UserStore } from '../db/stores.js';
 import { scoreIssue } from '../domain/scoring.js';
 import { DIFFICULTIES } from '../domain/types.js';
 import { toIssueDto } from './dto.js';
+import { relatedPostsByRepo } from './related.js';
 
 const tag = z.string().trim().min(1).max(40);
 export const profileSchema = z.object({
@@ -23,7 +24,7 @@ export const requireUser: RequestHandler = (_req, res, next) => {
   next();
 };
 
-export function meRouter(deps: { userStore: UserStore; savedStore: SavedStore; now?: () => Date }) {
+export function meRouter(deps: { userStore: UserStore; savedStore: SavedStore; blogStore: BlogStore; now?: () => Date }) {
   const router = Router();
   const now = deps.now ?? (() => new Date());
   router.use(requireUser);
@@ -59,11 +60,15 @@ export function meRouter(deps: { userStore: UserStore; savedStore: SavedStore; n
       deps.savedStore.list(userId),
     ]);
     const at = now();
+    const related = await relatedPostsByRepo(deps.blogStore, rows.map((r) => r.repoFullName));
     const items = rows.map((issue) => {
       // Saved issues are shown even if someone has since been assigned, so score them as unassigned.
       const scored = scoreIssue({ ...issue, assignee: null }, profile ?? { skills: [], preferredLanguages: [] }, at)!;
       // Score as unassigned, but show the real assignee.
-      return { ...toIssueDto({ ...scored, issue }), savedAt: issue.savedAt };
+      return {
+        ...toIssueDto({ ...scored, issue }, related.get(issue.repoFullName.toLowerCase()) ?? []),
+        savedAt: issue.savedAt,
+      };
     });
     res.json({ items, hiddenClosed });
   });

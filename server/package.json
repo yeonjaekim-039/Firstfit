@@ -11,17 +11,21 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "migrate": "tsx src/db/migrate.ts",
-    "ingest": "tsx src/ingest/run.ts"
+    "ingest": "tsx src/ingest/run.ts",
+    "ingest:blogs": "tsx src/blogs/run.ts"
   },
   "dependencies": {
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
+    "html-to-text": "^10.0.1",
     "pg": "^8.23.1",
+    "rss-parser": "^3.13.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
+    "@types/html-to-text": "^9.0.4",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",

@@ -1,5 +1,5 @@
 [Unit]
-Description=Issue Matcher daily ingest (crawl, repo metadata refresh, closed-issue sweep)
+Description=Issue Matcher daily ingest (blog feeds, then issue crawl, repo metadata refresh, closed-issue sweep)
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
@@ -7,6 +7,12 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/issuematcher
+# 1. Company engineering-blog feeds (seconds). The leading "-" means a failure here is logged
+#    but never stops the issue crawl below.
+ExecStart=-/usr/bin/flock -n /run/issuematcher-ingest.lock \
+  /usr/bin/docker compose --env-file .env --env-file image.env -f docker-compose.prod.yml \
+  run --rm --no-deps server node dist/blogs/run.js
+# 2. GitHub issues: crawl, repo metadata refresh, closed-issue sweep.
 # flock -n: skip (exit 1, logged) if the previous run is still going rather than stacking runs.
 ExecStart=/usr/bin/flock -n /run/issuematcher-ingest.lock \
   /usr/bin/docker compose --env-file .env --env-file image.env -f docker-compose.prod.yml \

@@ -3,7 +3,7 @@ import { cleanText } from '../db/clean.js';
 import type { IssueRow, RepoRow } from './mapIssue.js';
 
 /** Builds "($1, $2, ...), ($n+1, ...)" placeholder groups for a multi-row INSERT. */
-function placeholders(rowCount: number, cols: number): string {
+export function placeholders(rowCount: number, cols: number): string {
   return Array.from({ length: rowCount }, (_, row) => {
     const group = Array.from({ length: cols }, (_, col) => '$' + (row * cols + col + 1));
     return '(' + group.join(', ') + ')';

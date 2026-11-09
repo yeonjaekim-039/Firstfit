@@ -586,6 +586,127 @@ main.container {
   gap: 8px;
 }
 
+.related-posts {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.related-posts-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.related-posts ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.related-posts a {
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Blog card ---------- */
+
+.blog-card {
+  padding: 18px 20px;
+}
+
+.blog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.blog-company {
+  font-weight: 600;
+}
+
+.blog-score {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.blog-score span {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.blog-excerpt {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.blog-repos {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.blog-issues {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.blog-issues h4 {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.blog-issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.blog-issues li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.blog-issues li a {
+  overflow-wrap: anywhere;
+}
+
+.blog-issue-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .score {
   border-left: 1px solid var(--border);
   padding-left: 20px;

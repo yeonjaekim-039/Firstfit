@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom">
+<!-- Sample modelled on WordPress/Ghost engineering feeds (e.g. github.blog/engineering/feed/, blog.cloudflare.com/rss/): HTML <description> with a footer, full article in content:encoded, categories (some with attributes). Text is synthetic. -->
+<channel>
+	<title>The Example Blog</title>
+	<link>https://blog.example.org/engineering/</link>
+	<item>
+		<title>Inside our new Git storage &#8212; built for agents &amp; humans</title>
+		<link>https://blog.example.org/engineering/architecture/inside-new-git-storage/</link>
+		<dc:creator><![CDATA[Karthik Example]]></dc:creator>
+		<pubDate>Thu, 05 Nov 2026 20:23:21 +0000</pubDate>
+		<category><![CDATA[Architecture &amp; optimization]]></category>
+		<category domain="post_tag"><![CDATA[Git]]></category>
+		<category><![CDATA[Infrastructure]]></category>
+		<guid isPermaLink="false">https://blog.example.org/?p=100002</guid>
+		<description><![CDATA[<p>Our new Git storage architecture lets thousands of agents push to a single repository at once &mdash; here&#8217;s how we built it, what broke, and what we&#8217;d do differently. We cover replication, consensus, and the <strong>performance</strong> work that made it fast enough for every developer on the platform, with plenty of detail on the trade-offs we made along the way and the benchmarks we ran before shipping it to everyone.</p>
+<p>The post <a href="https://blog.example.org/engineering/architecture/inside-new-git-storage/">Inside our new Git storage</a> appeared first on <a href="https://blog.example.org">The Example Blog</a>.</p>
+]]></description>
+		<content:encoded><![CDATA[<script>alert("tracking")</script><p>Git hosting at scale is mostly a distributed systems problem. We built on <a href="https://github.com/git/git">git/git</a> and our own <a href="https://github.com/example/spokes-lite">spokes-lite</a>. See also <a href="https://github.com/example/spokes-lite/issues/42">the tracking issue</a>, <a href="https://github.com/topics/git">#git on GitHub</a>, <a href="https://github.com/sponsors/someone">sponsors</a>, <a href="https://gist.github.com/someone/abc123">a gist</a>, and <a href="https://docs.github.com/en/rest/repos">the REST docs</a>.</p><p>Replication and consensus details follow.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>The post-quantum future of web privacy</title>
+		<link>https://blog.example.org/post-quantum-privacy/</link>
+		<pubDate>Fri, 06 Nov 2026 14:00:00 GMT</pubDate>
+		<category><![CDATA[Cryptography]]></category>
+		<category><![CDATA[Security]]></category>
+		<guid isPermaLink="false">01M6PDR60R01B25PZF6REB72W3</guid>
+		<description><![CDATA[Cryptographic protocols keep sites safe from abuse while keeping users private. Here is how we are moving them to post-quantum cryptography.]]></description>
+		<content:encoded><![CDATA[<p>The highest priorities for the post-quantum transition are the basics. Our reference implementation lives at https://github.com/example/pq-privacy-pass.</p>]]></content:encoded>
+	</item>
+</channel>
+</rss>

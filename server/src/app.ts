@@ -1,8 +1,9 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { parseCookies, SESSION_COOKIE } from './auth/session.js';
-import type { IssueStore, SavedStore, UserStore } from './db/stores.js';
+import type { BlogStore, IssueStore, SavedStore, UserStore } from './db/stores.js';
 import { LABELS, LANGUAGES } from './ingest/queries.js';
 import { type AuthDeps, authRouter } from './routes/auth.js';
+import { blogsRouter } from './routes/blogs.js';
 import { issuesRouter } from './routes/issues.js';
 import { meRouter } from './routes/me.js';
 
@@ -10,6 +11,7 @@ export interface AppDeps {
   issueStore: IssueStore;
   userStore: UserStore;
   savedStore: SavedStore;
+  blogStore: BlogStore;
   auth: AuthDeps;
   now?: () => Date;
 }
@@ -34,6 +36,7 @@ export function createApp(deps: AppDeps) {
   });
 
   app.use('/api/issues', issuesRouter(deps));
+  app.use('/api/blogs', blogsRouter(deps));
   app.use('/api/auth', authRouter({ ...deps.auth, userStore: deps.userStore }));
   app.use('/api/me', meRouter(deps));
 

@@ -27,6 +27,52 @@ export interface Issue {
   breakdown: ScoreBreakdown
   /** Multiplier already applied to `score` for very long comment threads (1 = no penalty). */
   crowding: number
+  /** Up to two engineering-blog posts that mention this issue's repository. */
+  relatedPosts: RelatedPost[]
+}
+
+export interface RelatedPost {
+  id: number
+  company: string
+  title: string
+  url: string
+  publishedAt: string | null
+}
+
+export interface BlogPost {
+  id: number
+  company: string
+  title: string
+  /** Link to the original article; only metadata and a short excerpt are served. */
+  url: string
+  publishedAt: string | null
+  excerpt: string
+  tags: string[]
+  /** Lowercased "owner/repo" names the post mentions. */
+  repos: string[]
+  score: number
+  breakdown: { match: number; freshness: number }
+  /** Open beginner-friendly issues in repos the post mentions. */
+  issues: Issue[]
+}
+
+export interface BlogsPage {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  companies: string[]
+  items: BlogPost[]
+}
+
+export interface BlogQuery {
+  skills: string[]
+  preferredLanguages: string[]
+  /** Only ranks the issues shown under posts (difficulty fit), as on Discover. */
+  level: Difficulty | null
+  company: string[]
+  page: number
+  pageSize?: number
 }
 
 export interface SavedIssue extends Issue {
@@ -104,9 +150,22 @@ export function issuesUrl(q: IssueQuery): string {
   return `/api/issues?${p}`
 }
 
+export function blogsUrl(q: BlogQuery): string {
+  const p = new URLSearchParams()
+  const list = (key: string, values: string[]) => values.length && p.set(key, values.join(','))
+  list('skills', q.skills)
+  list('preferredLanguages', q.preferredLanguages)
+  if (q.level) p.set('level', q.level)
+  list('company', q.company)
+  p.set('page', String(q.page))
+  p.set('pageSize', String(q.pageSize ?? 20))
+  return `/api/blogs?${p}`
+}
+
 export const api = {
   meta: () => request<Meta>('/api/meta'),
   issues: (q: IssueQuery, signal?: AbortSignal) => request<IssuesPage>(issuesUrl(q), { signal }),
+  blogs: (q: BlogQuery, signal?: AbortSignal) => request<BlogsPage>(blogsUrl(q), { signal }),
   me: () => request<{ user: User; savedIssueIds: number[] }>('/api/me'),
   updateProfile: (profile: Pick<User, 'skills' | 'preferredLanguages' | 'difficulty'>) =>
     request<{ user: User }>('/api/me/profile', { method: 'PUT', body: JSON.stringify(profile) }),

@@ -107,10 +107,17 @@ function languageScore(language: string | null, preferred: string[]): number | n
 }
 
 function skillScore(issue: ScorableIssue, skills: string[]): number | null {
+  return skillMatch([issue.title, issue.repoFullName, issue.language ?? '', ...issue.labels].join(' '), skills);
+}
+
+/**
+ * Share of the user's skills (up to 3) found in `text` as whole tokens or phrases, 0..1;
+ * null when the user listed no skills. Shared by issue and blog-post ranking.
+ */
+export function skillMatch(text: string, skills: string[]): number | null {
   const wanted = [...new Set(skills.map((s) => s.toLowerCase().trim()).filter(Boolean))];
   if (wanted.length === 0) return null;
 
-  const text = [issue.title, issue.repoFullName, issue.language ?? '', ...issue.labels].join(' ');
   const tokens = new Set(tokenize(text));
   const phrase = ` ${tokenize(text).join(' ')} `;
 
