@@ -18,6 +18,30 @@
   --radius: 10px;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.05);
 
+  /* Discover palette. Prefixed because --surface, --border and --muted already belong to the app theme. */
+  --color-cream: #fcfbe6;
+  --color-surface: #fffef5;
+  --color-border: #dedbbf;
+  --color-forest: #3a5238;
+  --color-forest-dark: #2f442d;
+  --color-caramel: #7a4a26;
+  --color-tan: #e2b585;
+  --color-ink: #23321f;
+  --color-muted: #5b6a55;
+  /* Tints the design uses on the forest header. */
+  --color-forest-line: #4e6a4a;
+  --color-forest-chip: #4a6546;
+  --color-forest-outline: #6b8565;
+  --color-sage: #cfd7bf;
+  --color-on-tan: #2a3b28;
+  /* Filter bar. */
+  --color-filter-bar: #f6f4dc;
+  --color-chip-border: #d4d1b4;
+
+  --font-display: Fraunces, Georgia, serif;
+  --font-body: Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
   color-scheme: light dark;
   font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
@@ -408,6 +432,390 @@ main.container {
 .segment input:focus-visible + span {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* ---------- Discover theme ---------- */
+
+/* The design is light-only, so the app tokens are remapped here for shared components, in dark mode too. */
+.discover-page {
+  --bg: var(--color-cream);
+  --surface: var(--color-surface);
+  --text: var(--color-ink);
+  --muted: var(--color-muted);
+  --border: var(--color-border);
+  --accent: var(--color-forest);
+  --accent-text: var(--color-cream);
+  --accent-soft: color-mix(in srgb, var(--color-forest) 12%, var(--color-surface));
+  --danger-soft: #fdecec;
+  --danger: #b42318;
+  --easy: #1a7f4b;
+  --easy-soft: #e3f5ea;
+  --medium: #9a6200;
+  --medium-soft: #fdf2dc;
+  --hard: #b42318;
+  --hard-soft: #fdecec;
+  --shadow: none;
+
+  color-scheme: light;
+  min-height: calc(100svh - 64px);
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.discover-page a:not(.btn):hover {
+  color: var(--color-caramel);
+}
+
+.discover-wrap {
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+
+.site-header--forest {
+  --bg: var(--color-forest-dark);
+  --surface: var(--color-forest);
+  --text: var(--color-cream);
+  --muted: var(--color-sage);
+  --border: var(--color-forest-outline);
+  --accent: var(--color-tan);
+  --accent-text: var(--color-on-tan);
+
+  color-scheme: light;
+  background: var(--color-forest);
+  backdrop-filter: none;
+  border-bottom: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.site-header--forest .container {
+  position: relative;
+  min-height: 64px;
+  padding-inline: 32px;
+}
+
+.site-header--forest .container::after {
+  content: '';
+  position: absolute;
+  inset: auto 32px 0;
+  height: 1px;
+  background: var(--color-forest-line);
+}
+
+.site-header--forest .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.site-header--forest .brand-mark {
+  display: flex;
+  color: var(--color-tan);
+}
+
+.site-header--forest .nav a {
+  padding: 10px 14px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-sage);
+}
+
+.site-header--forest .nav a:hover {
+  background: none;
+  color: var(--color-cream);
+}
+
+.site-header--forest .nav a.active {
+  background: none;
+  border-bottom-color: var(--color-tan);
+  color: var(--color-cream);
+  font-weight: 600;
+}
+
+.site-header--forest .account {
+  gap: 12px;
+}
+
+.site-header--forest .account-name {
+  order: -1;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-sage);
+}
+
+.site-header--forest .avatar {
+  width: 32px;
+  height: 32px;
+  border: 0;
+}
+
+/* ---------- Discover hero ---------- */
+
+.hero {
+  background: var(--color-forest);
+  color: var(--color-cream);
+}
+
+.hero-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  padding-block: 44px 40px;
+}
+
+.hero-copy {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.hero-eyebrow {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-tan);
+}
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5.5vw, 46px);
+  font-weight: 600;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.hero-sub {
+  margin: 14px 0 0;
+  font-size: 15px;
+  color: var(--color-sage);
+}
+
+.matching-card {
+  flex: 0 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: var(--color-forest-dark);
+}
+
+.matching-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-sage);
+}
+
+.matching-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-forest-outline);
+  border-radius: 8px;
+  background: none;
+  color: var(--color-cream);
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.matching-edit:hover {
+  background: var(--color-forest);
+}
+
+.matching-edit:focus-visible {
+  outline-color: var(--color-tan);
+}
+
+.matching-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.matching-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--color-forest-chip);
+  overflow-wrap: anywhere;
+}
+
+.matching-chip--outline {
+  padding-block: 4px;
+  border: 1px solid var(--color-forest-outline);
+  background: none;
+}
+
+.matching-chip--level {
+  background: var(--color-tan);
+  color: var(--color-on-tan);
+  font-weight: 600;
+}
+
+.matching-empty {
+  flex-basis: 100%;
+  color: var(--color-sage);
+}
+
+/* ---------- Discover filter bar ---------- */
+
+.filter-bar {
+  background: var(--color-filter-bar);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filter-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-block: 14px;
+}
+
+.filter-show,
+.filter-caption {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filter-bar .toggle-chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border-color: var(--color-chip-border);
+  background: var(--color-surface);
+  color: var(--color-forest);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.filter-bar .toggle-chip[aria-pressed='true'] {
+  border-color: var(--color-forest);
+  background: var(--color-forest);
+  color: var(--color-cream);
+  font-weight: 600;
+}
+
+.filter-clear {
+  min-height: 36px;
+  margin-left: auto;
+  color: var(--color-forest);
+  font-size: 12px;
+}
+
+.discover-body {
+  padding-block: 36px 56px;
+}
+
+/* ---------- Edit profile drawer ---------- */
+
+.drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(420px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.drawer[open] {
+  animation: drawer-in 0.2s ease-out;
+}
+
+.drawer::backdrop {
+  background: rgb(35 50 31 / 0.45);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer[open] {
+    animation: none;
+  }
+}
+
+html:has(.drawer[open]) {
+  overflow: hidden;
+}
+
+.drawer-body {
+  min-height: 100%;
+  padding: 24px;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.drawer-head h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-forest);
+}
+
+.drawer-close {
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--color-forest);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
 }
 
 /* ---------- Discover layout ---------- */
@@ -898,6 +1306,38 @@ main.container {
 
   .account-name {
     display: none;
+  }
+
+  .discover-wrap,
+  .site-header--forest .container {
+    padding-inline: 16px;
+  }
+
+  .site-header--forest .container::after {
+    inset-inline: 16px;
+  }
+
+  .site-header--forest .nav {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .site-header--forest .nav a {
+    padding-inline: 8px;
+  }
+
+  .hero-title br {
+    display: none;
+  }
+
+  .hero-inner {
+    padding-block: 28px;
+    gap: 24px;
+  }
+
+  .hero-copy,
+  .matching-card {
+    flex-basis: 100%;
   }
 
   .issue-card {

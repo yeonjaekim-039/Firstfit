@@ -1,11 +1,13 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { api, DIFFICULTIES, type Difficulty, type IssueQuery, type IssuesPage } from '../api'
+import { api, type IssueQuery, type IssuesPage } from '../api'
 import { ChipInput } from '../components/ChipInput'
 import { DifficultyPicker } from '../components/DifficultyPicker'
+import { DiscoverHeader } from '../components/DiscoverHeader'
+import { FilterBar } from '../components/FilterBar'
 import { IssueCard } from '../components/IssueCard'
 import { Pagination } from '../components/Pagination'
-import { ToggleChips } from '../components/ToggleChips'
+import { ProfileDrawer } from '../components/ProfileDrawer'
 import { useSession } from '../sessionContext'
 import { readQuery, writeQuery } from './discoverQuery'
 
@@ -36,15 +38,7 @@ export function DiscoverPage() {
   const data = result?.data ?? lastData
   const error = loading ? null : (result?.error ?? null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const panelId = useId()
-  const activeCount =
-    query.skills.length +
-    query.preferredLanguages.length +
-    (query.level ? 1 : 0) +
-    query.language.length +
-    query.label.length +
-    query.difficulty.length
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const authError = params.get('authError')
 
   const update = (patch: Partial<IssueQuery>) =>
@@ -106,158 +100,123 @@ export function DiscoverPage() {
   const onToggleSave = (id: number) =>
     toggleSave(id).catch((err: Error) => setNotice(`Couldn't update saved issues: ${err.message}`))
 
+  // The modal drawer covers the page, so the notice moves into it while it's open.
+  const noticeBanner = notice && (
+    <div className="banner" role="status">
+      {notice}
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNotice(null)}>
+        Dismiss
+      </button>
+    </div>
+  )
+
   return (
-    <div className="discover">
-      {authError && (
-        <div className="banner banner-error" role="alert">
-          {AUTH_ERRORS[authError] ?? 'Sign-in failed.'}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => {
-              const next = new URLSearchParams(params)
-              next.delete('authError')
-              setParams(next, { replace: true })
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+    <div className="discover-page">
+      <DiscoverHeader
+        user={user}
+        data={data}
+        loading={loading}
+        skills={query.skills}
+        languages={query.preferredLanguages}
+        level={query.level}
+        onEditProfile={() => setDrawerOpen(true)}
+      />
 
-      <aside className={`sidebar card${panelOpen ? ' is-open' : ''}`} aria-label="Search options">
-        {/* Only shown at narrow widths (see .sidebar-toggle in index.css); desktop always shows the panel. */}
-        <button
-          type="button"
-          className="sidebar-toggle"
-          aria-expanded={panelOpen}
-          aria-controls={panelId}
-          onClick={() => setPanelOpen((o) => !o)}
-        >
-          <span>Profile &amp; filters</span>
-          <span className="sidebar-toggle-meta">
-            {activeCount > 0 && <span className="count-badge">{activeCount} active</span>}
-            <span className="chevron" aria-hidden>
-              ▾
-            </span>
-          </span>
-        </button>
-
-        <div className="sidebar-body" id={panelId}>
-          <h2 className="sidebar-title">About you</h2>
-          <ChipInput
-            label="Skills"
-            value={query.skills}
-            onChange={(skills) => update({ skills })}
-            placeholder="react, css, docs…"
-            suggestions={SKILL_SUGGESTIONS}
-          />
-          <ChipInput
-            label="Preferred languages (in order)"
-            value={query.preferredLanguages}
-            onChange={(preferredLanguages) => update({ preferredLanguages })}
-            placeholder="TypeScript, Python…"
-            suggestions={meta?.languages}
-            max={10}
-          />
-          <DifficultyPicker label="Your level" value={query.level} onChange={(level) => update({ level })} />
+      <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        {noticeBanner}
+        <ChipInput
+          label="Skills"
+          value={query.skills}
+          onChange={(skills) => update({ skills })}
+          placeholder="react, css, docs…"
+          suggestions={SKILL_SUGGESTIONS}
+        />
+        <ChipInput
+          label="Preferred languages (in order)"
+          value={query.preferredLanguages}
+          onChange={(preferredLanguages) => update({ preferredLanguages })}
+          placeholder="TypeScript, Python…"
+          suggestions={meta?.languages}
+          max={10}
+        />
+        <DifficultyPicker label="Your level" value={query.level} onChange={(level) => update({ level })} />
+        <div className="drawer-actions">
           {profileChanged && (
-            <button type="button" className="btn btn-sm" onClick={saveProfile}>
+            <button type="button" className="btn" onClick={saveProfile}>
               Save as my profile
             </button>
           )}
+          <button type="button" className="btn btn-primary" onClick={() => setDrawerOpen(false)}>
+            Done
+          </button>
+        </div>
+      </ProfileDrawer>
 
-          <h2 className="sidebar-title">Filters</h2>
-          <ToggleChips
-            label="Language"
-            options={meta?.languages ?? []}
-            selected={query.language}
-            onChange={(language) => update({ language })}
-          />
-          <ToggleChips
-            label="Label"
-            options={meta?.labels ?? []}
-            selected={query.label}
-            onChange={(label) => update({ label })}
-          />
-          <ToggleChips
-            label="Difficulty"
-            options={DIFFICULTIES}
-            format={(d) => d[0]!.toUpperCase() + d.slice(1)}
-            selected={query.difficulty}
-            onChange={(difficulty) => update({ difficulty: difficulty as Difficulty[] })}
-          />
-          {(query.language.length > 0 || query.label.length > 0 || query.difficulty.length > 0) && (
+      <FilterBar
+        languages={meta?.languages ?? []}
+        labels={meta?.labels ?? []}
+        selected={query}
+        onChange={update}
+      />
+
+      <div className="discover-wrap discover-body">
+        {authError && (
+          <div className="banner banner-error" role="alert">
+            {AUTH_ERRORS[authError] ?? 'Sign-in failed.'}
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => update({ language: [], label: [], difficulty: [] })}
+              onClick={() => {
+                const next = new URLSearchParams(params)
+                next.delete('authError')
+                setParams(next, { replace: true })
+              }}
             >
-              Clear filters
-            </button>
-          )}
-          <button type="button" className="btn btn-primary sidebar-done" onClick={() => setPanelOpen(false)}>
-            {data ? `Show ${data.total.toLocaleString()} result${data.total === 1 ? '' : 's'}` : 'Show results'}
-          </button>
-        </div>
-      </aside>
-
-      <section className="results" aria-busy={loading} aria-label="Results">
-        <div className="results-header">
-          <h1>Ranked for you</h1>
-          {data && (
-            <p className="muted">
-              {data.total.toLocaleString()} open issue{data.total === 1 ? '' : 's'}
-              {data.rankedCount < data.total && ` · top ${data.rankedCount.toLocaleString()} most recent ranked`}
-            </p>
-          )}
-        </div>
-
-        {notice && (
-          <div className="banner" role="status">
-            {notice}
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNotice(null)}>
               Dismiss
             </button>
           </div>
         )}
-        {error && (
-          <div className="banner banner-error" role="alert">
-            Couldn&apos;t load issues: {error}
-          </div>
-        )}
 
-        {!data && loading && <p className="muted">Loading…</p>}
-        {data && data.items.length === 0 && !loading && (
-          <div className="empty card">
-            <p>No open issues match these filters.</p>
-            <p className="muted">Try removing a language or label filter.</p>
-          </div>
-        )}
+        <section className="results" aria-busy={loading} aria-label="Results">
+          {!drawerOpen && noticeBanner}
+          {error && (
+            <div className="banner banner-error" role="alert">
+              Couldn&apos;t load issues: {error}
+            </div>
+          )}
 
-        <div className={`issue-list${loading && data ? ' is-stale' : ''}`}>
-          {data?.items.map((issue) => (
-            <IssueCard
-              key={issue.id}
-              issue={issue}
-              saved={savedIds.has(issue.id)}
-              onToggleSave={user ? () => onToggleSave(issue.id) : undefined}
-              canSignIn={user === null && Boolean(meta?.auth.github)}
+          {!data && loading && <p className="muted">Loading…</p>}
+          {data && data.items.length === 0 && !loading && (
+            <div className="empty card">
+              <p>No open issues match these filters.</p>
+              <p className="muted">Try removing a language or label filter.</p>
+            </div>
+          )}
+
+          <div className={`issue-list${loading && data ? ' is-stale' : ''}`}>
+            {data?.items.map((issue) => (
+              <IssueCard
+                key={issue.id}
+                issue={issue}
+                saved={savedIds.has(issue.id)}
+                onToggleSave={user ? () => onToggleSave(issue.id) : undefined}
+                canSignIn={user === null && Boolean(meta?.auth.github)}
+              />
+            ))}
+          </div>
+
+          {data && (
+            <Pagination
+              page={query.page}
+              totalPages={data.totalPages}
+              onChange={(page) => {
+                update({ page })
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
             />
-          ))}
-        </div>
-
-        {data && (
-          <Pagination
-            page={query.page}
-            totalPages={data.totalPages}
-            onChange={(page) => {
-              update({ page })
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }}
-          />
-        )}
-      </section>
+          )}
+        </section>
+      </div>
     </div>
   )
 }

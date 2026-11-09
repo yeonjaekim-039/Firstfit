@@ -34,7 +34,52 @@ describe('Discover page', () => {
     renderAt('/')
     expect(await screen.findByRole('link', { name: 'First' })).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /sign in with github/i })[0]).toHaveAttribute('href', '/api/auth/github')
-    expect(screen.getByText('1 open issue')).toBeInTheDocument()
+    expect(screen.getByText('1 open issue ranked for you.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('1 issue you could ship this week.')
+  })
+
+  it('greets by first name, counts the results and shows what the ranking uses', async () => {
+    mockApi({
+      ...signedIn(),
+      'GET /api/issues': () => ({
+        body: { ...page([makeIssue({ id: 1 }), makeIssue({ id: 2 })]), total: 290_881, rankedCount: 5000 },
+      }),
+    })
+    renderAt('/?skills=react,docs&langs=TypeScript,Java&level=medium')
+    await screen.findByRole('link', { name: 'Fix bug 1' })
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('2 issues you could ship this week, The.')
+    expect(screen.getByText('Ranked from 5,000 recent issues across 290,881 open ones.')).toBeInTheDocument()
+    const card = within(screen.getByRole('region', { name: 'Matching on' }))
+    for (const chip of ['react', 'docs', '1 · TypeScript', '2 · Java', 'Level: Medium']) {
+      expect(card.getByText(chip)).toBeInTheDocument()
+    }
+  })
+
+  it('edits the profile in a drawer and can save it', async () => {
+    const fetch = mockApi({
+      ...signedIn(),
+      'GET /api/issues': () => ({ body: page([makeIssue()]) }),
+      'PUT /api/me/profile': (_u, init) => ({ body: { user: { ...testUser, ...JSON.parse(String(init!.body)) } } }),
+    })
+    renderAt('/?skills=react&langs=TypeScript&level=easy')
+    await screen.findByRole('link', { name: 'Fix bug 1' })
+    expect(screen.queryByLabelText('Skills')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit profile' }))
+    const drawer = within(await screen.findByRole('dialog', { name: 'Edit profile' }))
+    await userEvent.type(drawer.getByLabelText('Skills'), 'css{Enter}')
+    await waitFor(() => {
+      const urls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/issues'))
+      expect(urls.at(-1)).toContain('skills=react%2Ccss')
+    })
+
+    await userEvent.click(drawer.getByRole('button', { name: 'Save as my profile' }))
+    expect(await drawer.findByText('Saved as your profile.')).toBeInTheDocument()
+    const put = fetch.mock.calls.find(([u]) => u === '/api/me/profile')!
+    expect(JSON.parse(String(put[1]!.body))).toEqual({ skills: ['react', 'css'], preferredLanguages: ['TypeScript'], difficulty: 'easy' })
+
+    await userEvent.click(drawer.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('sends skills, languages, level and filters from the URL to the API', async () => {
@@ -82,22 +127,46 @@ describe('Discover page', () => {
     expect(fetch.mock.calls.some(([u, init]) => u === '/api/me/saved/9' && init?.method === 'PUT')).toBe(true)
   })
 
-  it('collapses the search panel behind a toggle that counts active options', async () => {
-    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page([makeIssue()]) }) })
-    renderAt('/?skills=react,css&language=Go')
-    const toggle = screen.getByRole('button', { name: /profile & filters/i })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(toggle).toHaveTextContent('3 active')
-    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
-    expect(panel.closest('.sidebar')).not.toHaveClass('is-open')
+  it('keeps extra languages behind a toggle in the filter bar', async () => {
+    const fetch = mockApi({
+      'GET /api/meta': () => ({ body: { ...META, languages: ['TypeScript', 'Python', 'Go', 'Rust', 'Java'] } }),
+      'GET /api/me': () => ({ status: 401, body: { error: 'Not signed in' } }),
+      'GET /api/issues': () => ({ body: page([makeIssue()]) }),
+    })
+    renderAt('/')
+    const languages = within(await screen.findByRole('group', { name: 'Language' }))
+    const more = await languages.findByRole('button', { name: 'More languages' })
+    expect(languages.queryByRole('button', { name: 'Rust' })).not.toBeInTheDocument()
 
-    await userEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(panel.closest('.sidebar')).toHaveClass('is-open')
+    await userEvent.click(more)
+    expect(languages.getByRole('button', { name: 'Fewer languages' })).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(languages.getByRole('button', { name: 'Rust' }))
+    await waitFor(() => {
+      const urls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/issues'))
+      expect(urls.at(-1)).toContain('language=Rust')
+    })
 
-    await screen.findByRole('link', { name: 'Fix bug 1' })
-    await userEvent.click(screen.getByRole('button', { name: 'Show 1 result' }))
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // Deselecting the extra language leaves the row expanded, so the chip being clicked stays put.
+    await userEvent.click(languages.getByRole('button', { name: 'Rust' }))
+    expect(languages.getByRole('button', { name: 'Rust' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('shows a selected extra language from a shared URL and clears all filters', async () => {
+    const fetch = mockApi({
+      'GET /api/meta': () => ({ body: { ...META, languages: ['TypeScript', 'Python', 'Go', 'Rust'] } }),
+      'GET /api/me': () => ({ status: 401, body: { error: 'Not signed in' } }),
+      'GET /api/issues': () => ({ body: page([makeIssue()]) }),
+    })
+    renderAt('/?language=Rust&label=help%20wanted&difficulty=easy')
+    const rust = await screen.findByRole('button', { name: 'Rust' })
+    expect(rust).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => {
+      const urls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/issues'))
+      expect(urls.at(-1)).not.toMatch(/language=|label=|difficulty=/)
+    })
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
   })
 
   it('shows a readable message for OAuth errors', async () => {
