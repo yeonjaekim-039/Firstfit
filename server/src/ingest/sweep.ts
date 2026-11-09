@@ -2,7 +2,7 @@ import type pg from 'pg';
 import type { Difficulty } from '../domain/types.js';
 import { computeDifficulty } from './difficulty.js';
 import type { GitHubIssue } from './github.js';
-import { normalizeLabels, parseRepoUrl, pgText } from './mapIssue.js';
+import { normalizeLabels, parseRepoUrl } from './mapIssue.js';
 
 /** Issues still marked open that the latest crawl did not return. */
 export interface StaleIssue {
@@ -50,9 +50,9 @@ export function reconcile(stored: StaleIssue, fetched: GitHubIssue | null, targe
   const bodyLength = fetched.body?.length ?? 0;
   return {
     action: 'refresh',
-    title: pgText(fetched.title),
+    title: fetched.title,
     labels,
-    assignee: fetched.assignee ? pgText(fetched.assignee.login) : null,
+    assignee: fetched.assignee?.login ?? null,
     commentCount: fetched.comments,
     bodyLength,
     difficulty: computeDifficulty({ labels, commentCount: fetched.comments, bodyLength }),
@@ -112,7 +112,8 @@ export async function findStaleIssues(
   };
 }
 
-async function apply(pool: pg.Pool, id: number, r: Reconciliation): Promise<void> {
+/** Writes one reconciliation. Text is cleaned by the pool's CleaningClient (db/clean.ts). */
+export async function applyReconciliation(pool: Pick<pg.Pool, 'query'>, id: number, r: Reconciliation): Promise<void> {
   if (r.action === 'close' || r.action === 'delist') {
     await pool.query('UPDATE issues SET state = $2, ingested_at = now() WHERE id = $1', [
       id,
@@ -140,7 +141,7 @@ export async function sweepStale(opts: SweepOptions): Promise<SweepResult> {
   for (const stale of rows) {
     const fetched = await opts.fetcher.getIssue(stale.owner, stale.repo, stale.number);
     const r = reconcile(stale, fetched, opts.targetLabels);
-    await apply(opts.pool, stale.id, r);
+    await applyReconciliation(opts.pool, stale.id, r);
     result.checked++;
     if (r.action === 'close') result.closed++;
     else if (r.action === 'delist') result.delisted++;

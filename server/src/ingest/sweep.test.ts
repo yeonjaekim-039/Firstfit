@@ -59,8 +59,8 @@ describe('reconcile', () => {
     });
   });
 
-  it('strips NUL characters from refreshed titles and labels', () => {
-    const r = reconcile(stored, fetched({ title: 'a\u0000b', labels: [{ name: 'good first issue\u0000' }] }), LABELS);
-    expect(r).toMatchObject({ action: 'refresh', title: 'ab', labels: ['good first issue'] });
+  it('still recognizes a target label that contains a NUL character', () => {
+    const r = reconcile(stored, fetched({ labels: [{ name: 'good first issue\u0000' }] }), LABELS);
+    expect(r).toMatchObject({ action: 'refresh', labels: ['good first issue'] });
   });
 });

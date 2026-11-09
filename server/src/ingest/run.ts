@@ -68,6 +68,7 @@ async function main() {
     );
     const archived = new Set(archivedRows.map((r) => r.full_name.toLowerCase()));
     let skippedArchived = 0;
+    let skippedBadRows = 0;
 
     for (const language of languages) {
       for (const label of labels) {
@@ -83,7 +84,9 @@ async function main() {
             const all = items.filter((i) => !i.pull_request).map((i) => mapIssue(i, language));
             const mapped = all.filter((m) => !archived.has(m.repo.fullName.toLowerCase()));
             skippedArchived += all.length - mapped.length;
-            await upsertBatch(pool, mapped.map((m) => m.repo), mapped.map((m) => m.issue));
+            // A bad row is logged and skipped inside upsertBatch; it never stops the crawl.
+            const { skipped } = await upsertBatch(pool, mapped.map((m) => m.repo), mapped.map((m) => m.issue), log);
+            skippedBadRows += skipped;
             for (const m of mapped) seen.add(m.issue.id);
           },
         });
@@ -92,7 +95,10 @@ async function main() {
       }
       if (seen.size >= maxIssues) break;
     }
-    log(`Crawl done. Upserted ${seen.size} distinct issues; skipped ${skippedArchived} from archived repos.`);
+    log(
+      `Crawl done. Saw ${seen.size} distinct issues; skipped ${skippedArchived} from archived repos` +
+        ` and ${skippedBadRows} that failed to write (logged above).`,
+    );
   }
 
   if (values['no-repo-meta'] || values['recheck-only']) {

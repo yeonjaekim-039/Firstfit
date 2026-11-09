@@ -1,4 +1,5 @@
 import type { Difficulty } from '../domain/types.js';
+import { cleanText } from '../db/clean.js';
 import { computeDifficulty } from './difficulty.js';
 import type { GitHubSearchIssue } from './github.js';
 
@@ -28,18 +29,13 @@ export interface IssueRow {
 }
 
 /**
- * Postgres TEXT cannot hold NUL (U+0000): one in any parameter fails the whole multi-row
- * INSERT with "invalid byte sequence for encoding UTF8: 0x00". GitHub allows NUL in issue
- * titles and label names, so strip it from every string we store.
+ * Lowercased, trimmed, de-duplicated label names (empty ones dropped). NUL is removed here
+ * too, only so "bug\u0000" and "bug" de-duplicate; every written value is cleaned again at
+ * the database boundary (db/clean.ts).
  */
-export function pgText(value: string): string {
-  return value.replaceAll('\u0000', '');
-}
-
-/** Lowercased, trimmed, NUL-free, de-duplicated label names (empty ones dropped). */
 export function normalizeLabels(labels: GitHubSearchIssue['labels']): string[] {
   return [
-    ...new Set(labels.map((l) => pgText(typeof l === 'string' ? l : l.name).toLowerCase().trim())),
+    ...new Set(labels.map((l) => cleanText(typeof l === 'string' ? l : l.name).toLowerCase().trim())),
   ].filter(Boolean);
 }
 
@@ -61,14 +57,14 @@ export function mapIssue(item: GitHubSearchIssue, language: string): { repo: Rep
       id: item.id,
       repoFullName: fullName,
       number: item.number,
-      title: pgText(item.title),
+      title: item.title,
       url: item.html_url,
       bodyLength,
       labels,
       language,
       commentCount: item.comments,
       state: item.state,
-      assignee: item.assignee ? pgText(item.assignee.login) : null,
+      assignee: item.assignee?.login ?? null,
       difficulty: computeDifficulty({ labels, commentCount: item.comments, bodyLength }),
       createdAt: item.created_at,
       updatedAt: item.updated_at,
