@@ -42,6 +42,12 @@
   --color-caramel-ring: #94613b;
   --color-caramel-line: #a87550;
   --color-caramel-text: #f3dec5;
+  /* Result cards. */
+  --color-score-pill: #f1e3d2;
+  --color-score-text: #6a3f1f;
+  --color-card-divider: #ece9d0;
+  --color-label-text: #4f5f4a;
+  --color-button-border: #c9c6a8;
 
   --font-display: Fraunces, Georgia, serif;
   --font-body: Inter, system-ui, sans-serif;
@@ -961,6 +967,340 @@ main.container {
   color: var(--color-caramel-text);
 }
 
+/* ---------- Discover results grid ---------- */
+
+.results-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.results-heading h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-forest);
+}
+
+.results-heading span {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 20px;
+}
+
+.match-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.match-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.match-card-source {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.match-card-repo {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-forest);
+  overflow-wrap: anywhere;
+}
+
+.match-card-details,
+.match-card-activity {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.match-card-score {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--color-score-pill);
+  color: var(--color-score-text);
+  text-align: center;
+}
+
+.match-card-score-value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.match-card-score-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.match-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.match-card-title a {
+  color: inherit;
+}
+
+.match-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match-card-labels li {
+  padding: 3px 10px;
+  border: 1px solid var(--color-chip-border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-label-text);
+  overflow-wrap: anywhere;
+}
+
+.match-card .related-posts,
+.match-card .score-note {
+  margin: 0;
+}
+
+.match-card-why {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.match-card-why summary {
+  width: fit-content;
+  color: var(--color-forest);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.match-card-why dl {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+
+.match-card-why dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.match-card-why dd {
+  margin: 0;
+  color: var(--color-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-card-divider);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.match-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.match-card-save {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--color-forest);
+  cursor: pointer;
+}
+
+.match-card-save:hover {
+  background: var(--color-filter-bar);
+}
+
+.match-card-view {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.discover-page .pagination {
+  flex-wrap: wrap;
+  margin-top: 28px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.discover-page .pagination .btn {
+  min-height: 44px;
+  padding: 0 22px;
+  border-color: var(--color-button-border);
+  border-radius: 10px;
+  background: none;
+  color: var(--color-forest);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.discover-page .pagination .btn:hover:not(:disabled) {
+  background: var(--color-filter-bar);
+}
+
+/* ---------- Discover loading, empty and error states ---------- */
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.skeleton-hero {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 32px;
+  border-radius: 20px;
+}
+
+.skeleton-hero-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skeleton-line,
+.skeleton-pill,
+.skeleton-ring {
+  background: var(--color-card-divider);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.skeleton-line--title {
+  height: 18px;
+}
+
+.skeleton-line--headline {
+  height: 30px;
+  border-radius: 8px;
+}
+
+.skeleton-pills {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 40px;
+}
+
+.skeleton-pill {
+  width: 96px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.skeleton-ring {
+  flex: none;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line,
+  .skeleton-pill,
+  .skeleton-ring {
+    animation: none;
+  }
+}
+
+.state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.state-card h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-forest);
+}
+
+.state-card p {
+  margin: 0;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.state-card .btn {
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 22px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
 /* ---------- Edit profile drawer ---------- */
 
 .drawer {
@@ -1562,6 +1902,19 @@ html:has(.drawer[open]) {
 
   .top-match-score {
     max-width: none;
+  }
+
+  .match-card {
+    padding: 18px;
+  }
+
+  .skeleton-hero {
+    padding: 20px;
+  }
+
+  .skeleton-ring {
+    width: 72px;
+    height: 72px;
   }
 
   .hero-inner {

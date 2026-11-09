@@ -177,7 +177,7 @@ describe('Discover page', () => {
     expect(top.getByRole('link', { name: 'Best' })).toBeInTheDocument()
     expect(top.getByRole('img', { name: 'Match score 92 out of 100' })).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Best' })).toHaveLength(1)
-    expect(screen.getByRole('link', { name: 'Next' }).closest('.issue-card')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Next' }).closest('.match-card')).not.toBeNull()
   })
 
   it('has no Top match after the first page', async () => {
@@ -186,6 +186,83 @@ describe('Discover page', () => {
     renderAt('/?page=2')
     await screen.findByRole('link', { name: 'Page two item' })
     expect(screen.queryByRole('article', { name: 'Top match' })).not.toBeInTheDocument()
+  })
+
+  it('labels the grid with the range shown and the ranked total pagination can reach', async () => {
+    const items = [makeIssue({ id: 1 }), makeIssue({ id: 2 }), makeIssue({ id: 3 })]
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: { ...page(items), total: 295_681, rankedCount: 5000, totalPages: 250 } }) })
+    renderAt('/')
+    expect(await screen.findByRole('heading', { name: 'Also worth a look' })).toBeInTheDocument()
+    expect(screen.getByText('Showing 1–3 of 5,000 ranked matches')).toBeInTheDocument()
+  })
+
+  it('counts from the start of later pages', async () => {
+    const items = [makeIssue({ id: 21 }), makeIssue({ id: 22 })]
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: { ...page(items), page: 2, total: 42, rankedCount: 42, totalPages: 3 } }) })
+    renderAt('/?page=2')
+    expect(await screen.findByRole('heading', { name: 'More matches' })).toBeInTheDocument()
+    expect(screen.getByText('Showing 21–22 of 42 ranked matches')).toBeInTheDocument()
+  })
+
+  it('shows skeleton cards until the first results arrive', async () => {
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page([makeIssue()]) }) })
+    renderAt('/')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading issues…')
+    expect(document.querySelectorAll('.skeleton-card').length).toBeGreaterThan(0)
+    await screen.findByRole('link', { name: 'Fix bug 1' })
+    expect(document.querySelector('.skeleton-card')).toBeNull()
+  })
+
+  it('offers to clear filters when nothing matches', async () => {
+    const fetch = mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page([]) }) })
+    renderAt('/?language=Go')
+    await screen.findByRole('heading', { name: 'No open issues match these filters.' })
+    const card = screen.getByRole('heading', { name: 'No open issues match these filters.' }).parentElement!
+    await userEvent.click(within(card).getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => {
+      const urls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/issues'))
+      expect(urls.at(-1)).not.toContain('language=')
+    })
+  })
+
+  it('links back to the first page when the requested page is past the end', async () => {
+    const fetch = mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: { ...page([]), page: 9, total: 42, totalPages: 3 } }) })
+    renderAt('/?page=9')
+    await userEvent.click(await screen.findByRole('button', { name: 'Back to the first page' }))
+    await waitFor(() => {
+      const urls = fetch.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/issues'))
+      expect(urls.at(-1)).toContain('page=1')
+    })
+  })
+
+  it('shows the rate-limit state on a 429 and recovers on Try again', async () => {
+    let calls = 0
+    mockApi({
+      ...signedOut,
+      'GET /api/issues': () => (++calls === 1 ? { status: 429, body: { error: 'Slow down' } } : { body: page([makeIssue()]) }),
+    })
+    renderAt('/')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Too many requests right now.')
+    expect(alert).not.toHaveTextContent('Slow down')
+    await userEvent.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('link', { name: 'Fix bug 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows other failures with their message instead of stale results', async () => {
+    let calls = 0
+    mockApi({
+      ...signedOut,
+      'GET /api/issues': () => (++calls === 1 ? { body: page([makeIssue({ title: 'Old result' })]) } : { status: 500, body: { error: 'Internal server error' } }),
+    })
+    renderAt('/')
+    await screen.findByRole('link', { name: 'Old result' })
+    await userEvent.click(within(screen.getByRole('group', { name: 'Language' })).getByRole('button', { name: 'Python' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Couldn’t load issues.')
+    expect(alert).toHaveTextContent('Internal server error')
+    expect(screen.queryByRole('link', { name: 'Old result' })).not.toBeInTheDocument()
   })
 
   it('shows a readable message for OAuth errors', async () => {

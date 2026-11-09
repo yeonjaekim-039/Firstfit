@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { api, type IssueQuery, type IssuesPage } from '../api'
+import { api, ApiError, type IssueQuery, type IssuesPage } from '../api'
 import { ChipInput } from '../components/ChipInput'
 import { DifficultyPicker } from '../components/DifficultyPicker'
 import { DiscoverHeader } from '../components/DiscoverHeader'
 import { FilterBar } from '../components/FilterBar'
-import { IssueCard } from '../components/IssueCard'
+import { MatchCard } from '../components/MatchCard'
 import { Pagination } from '../components/Pagination'
 import { ProfileDrawer } from '../components/ProfileDrawer'
+import { EmptyResults, LoadError, ResultsSkeleton } from '../components/ResultStates'
 import { TopMatchCard } from '../components/TopMatchCard'
 import { useSession } from '../sessionContext'
 import { readQuery, writeQuery } from './discoverQuery'
@@ -33,11 +34,12 @@ export function DiscoverPage() {
   const key = writeQuery(query).toString()
 
   // The last completed fetch, tagged with the query it answered; loading = it isn't for the current query.
-  const [result, setResult] = useState<{ key: string; data?: IssuesPage; error?: string } | null>(null)
+  const [result, setResult] = useState<{ key: string; data?: IssuesPage; error?: string; rateLimited?: boolean } | null>(null)
   const [lastData, setLastData] = useState<IssuesPage | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const loading = result?.key !== key
-  const data = result?.data ?? lastData
   const error = loading ? null : (result?.error ?? null)
+  const data = error ? null : (result?.data ?? lastData)
   const [notice, setNotice] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const authError = params.get('authError')
@@ -69,14 +71,16 @@ export function DiscoverPage() {
           setLastData(page)
         })
         .catch((err: unknown) => {
-          if ((err as Error).name !== 'AbortError') setResult({ key, error: (err as Error).message })
+          if ((err as Error).name !== 'AbortError') {
+            setResult({ key, error: (err as Error).message, rateLimited: err instanceof ApiError && err.status === 429 })
+          }
         })
     }, 250)
     return () => {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [key])
+  }, [key, attempt])
 
   const profileChanged =
     user &&
@@ -110,6 +114,9 @@ export function DiscoverPage() {
   // Results arrive ranked, so the first item on page 1 is the highest-scoring issue overall.
   const topMatch = data?.page === 1 ? data.items[0] : undefined
   const otherIssues = topMatch ? data!.items.slice(1) : (data?.items ?? [])
+  const firstShown = data ? (data.page - 1) * data.pageSize + 1 : 0
+  const lastShown = data ? firstShown + data.items.length - 1 : 0
+  const filtersActive = query.language.length + query.label.length + query.difficulty.length > 0
 
   // The modal drawer covers the page, so the notice moves into it while it's open.
   const noticeBanner = notice && (
@@ -191,29 +198,44 @@ export function DiscoverPage() {
         <section className="results" aria-busy={loading} aria-label="Results">
           {!drawerOpen && noticeBanner}
           {error && (
-            <div className="banner banner-error" role="alert">
-              Couldn&apos;t load issues: {error}
-            </div>
+            <LoadError
+              message={error}
+              rateLimited={Boolean(result?.rateLimited)}
+              onRetry={() => {
+                setResult(null)
+                setAttempt((a) => a + 1)
+              }}
+            />
           )}
 
-          {!data && loading && <p className="muted">Loading…</p>}
+          {!data && loading && <ResultsSkeleton />}
           {data && data.items.length === 0 && !loading && (
-            <div className="empty card">
-              <p>No open issues match these filters.</p>
-              <p className="muted">Try removing a language or label filter.</p>
-            </div>
+            <EmptyResults
+              offPage={data.total > 0}
+              onFirstPage={() => update({ page: 1 })}
+              onClearFilters={filtersActive ? () => update({ language: [], label: [], difficulty: [] }) : undefined}
+            />
           )}
 
           <div className={`discover-results${loading && data ? ' is-stale' : ''}`}>
             {topMatch && (
               <TopMatchCard issue={topMatch} preferredLanguages={query.preferredLanguages} {...saveProps(topMatch.id)} />
             )}
-            {otherIssues.length > 0 && (
-              <div className="issue-list">
-                {otherIssues.map((issue) => (
-                  <IssueCard key={issue.id} issue={issue} {...saveProps(issue.id)} />
-                ))}
-              </div>
+            {data && otherIssues.length > 0 && (
+              <>
+                <div className="results-heading">
+                  <h2>{data.page === 1 ? 'Also worth a look' : 'More matches'}</h2>
+                  <span>
+                    Showing {firstShown.toLocaleString()}–{lastShown.toLocaleString()} of {data.rankedCount.toLocaleString()} ranked{' '}
+                    {data.rankedCount === 1 ? 'match' : 'matches'}
+                  </span>
+                </div>
+                <div className="match-grid">
+                  {otherIssues.map((issue) => (
+                    <MatchCard key={issue.id} issue={issue} {...saveProps(issue.id)} />
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
