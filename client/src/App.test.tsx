@@ -122,8 +122,8 @@ describe('Discover page', () => {
       expect(urls.at(-1)).toContain('skills=react')
     })
     await screen.findByRole('link', { name: 'Nine' })
-    await userEvent.click(screen.getByRole('button', { name: '☆ Save' }))
-    expect(await screen.findByRole('button', { name: '★ Saved' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('button', { name: 'Saved' })).toBeInTheDocument()
     expect(fetch.mock.calls.some(([u, init]) => u === '/api/me/saved/9' && init?.method === 'PUT')).toBe(true)
   })
 
@@ -167,6 +167,25 @@ describe('Discover page', () => {
       expect(urls.at(-1)).not.toMatch(/language=|label=|difficulty=/)
     })
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+  })
+
+  it('features the first ranked issue as the Top match and lists the rest below it', async () => {
+    const items = [makeIssue({ id: 1, title: 'Best', score: 92 }), makeIssue({ id: 2, title: 'Next', score: 80 })]
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: page(items) }) })
+    renderAt('/')
+    const top = within(await screen.findByRole('article', { name: 'Top match' }))
+    expect(top.getByRole('link', { name: 'Best' })).toBeInTheDocument()
+    expect(top.getByRole('img', { name: 'Match score 92 out of 100' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Best' })).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Next' }).closest('.issue-card')).not.toBeNull()
+  })
+
+  it('has no Top match after the first page', async () => {
+    const items = [makeIssue({ id: 21, title: 'Page two item' })]
+    mockApi({ ...signedOut, 'GET /api/issues': () => ({ body: { ...page(items), page: 2, totalPages: 3 } }) })
+    renderAt('/?page=2')
+    await screen.findByRole('link', { name: 'Page two item' })
+    expect(screen.queryByRole('article', { name: 'Top match' })).not.toBeInTheDocument()
   })
 
   it('shows a readable message for OAuth errors', async () => {

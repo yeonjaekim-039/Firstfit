@@ -8,6 +8,7 @@ import { FilterBar } from '../components/FilterBar'
 import { IssueCard } from '../components/IssueCard'
 import { Pagination } from '../components/Pagination'
 import { ProfileDrawer } from '../components/ProfileDrawer'
+import { TopMatchCard } from '../components/TopMatchCard'
 import { useSession } from '../sessionContext'
 import { readQuery, writeQuery } from './discoverQuery'
 
@@ -99,6 +100,16 @@ export function DiscoverPage() {
 
   const onToggleSave = (id: number) =>
     toggleSave(id).catch((err: Error) => setNotice(`Couldn't update saved issues: ${err.message}`))
+
+  const saveProps = (id: number) => ({
+    saved: savedIds.has(id),
+    onToggleSave: user ? () => onToggleSave(id) : undefined,
+    canSignIn: user === null && Boolean(meta?.auth.github),
+  })
+
+  // Results arrive ranked, so the first item on page 1 is the highest-scoring issue overall.
+  const topMatch = data?.page === 1 ? data.items[0] : undefined
+  const otherIssues = topMatch ? data!.items.slice(1) : (data?.items ?? [])
 
   // The modal drawer covers the page, so the notice moves into it while it's open.
   const noticeBanner = notice && (
@@ -193,16 +204,17 @@ export function DiscoverPage() {
             </div>
           )}
 
-          <div className={`issue-list${loading && data ? ' is-stale' : ''}`}>
-            {data?.items.map((issue) => (
-              <IssueCard
-                key={issue.id}
-                issue={issue}
-                saved={savedIds.has(issue.id)}
-                onToggleSave={user ? () => onToggleSave(issue.id) : undefined}
-                canSignIn={user === null && Boolean(meta?.auth.github)}
-              />
-            ))}
+          <div className={`discover-results${loading && data ? ' is-stale' : ''}`}>
+            {topMatch && (
+              <TopMatchCard issue={topMatch} preferredLanguages={query.preferredLanguages} {...saveProps(topMatch.id)} />
+            )}
+            {otherIssues.length > 0 && (
+              <div className="issue-list">
+                {otherIssues.map((issue) => (
+                  <IssueCard key={issue.id} issue={issue} {...saveProps(issue.id)} />
+                ))}
+              </div>
+            )}
           </div>
 
           {data && (

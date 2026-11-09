@@ -37,6 +37,11 @@
   /* Filter bar. */
   --color-filter-bar: #f6f4dc;
   --color-chip-border: #d4d1b4;
+  /* Top match card. */
+  --color-caramel-dark: #5e3818;
+  --color-caramel-ring: #94613b;
+  --color-caramel-line: #a87550;
+  --color-caramel-text: #f3dec5;
 
   --font-display: Fraunces, Georgia, serif;
   --font-body: Inter, system-ui, sans-serif;
@@ -736,6 +741,226 @@ main.container {
   padding-block: 36px 56px;
 }
 
+.discover-results {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  transition: opacity 0.15s;
+}
+
+.discover-results.is-stale {
+  opacity: 0.55;
+}
+
+/* ---------- Top match card ---------- */
+
+.top-match {
+  --bg: var(--color-caramel-dark);
+  --text: var(--color-cream);
+  --muted: var(--color-caramel-text);
+  --border: var(--color-caramel-line);
+  --accent: var(--color-cream);
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 32px;
+  padding: 32px;
+  border-radius: 20px;
+  background: var(--color-caramel);
+  color: var(--color-cream);
+}
+
+.top-match-main {
+  flex: 999 1 460px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.top-match-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.top-match-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-cream);
+  color: var(--color-caramel);
+  font-weight: 600;
+}
+
+.top-match-repo {
+  font-family: var(--font-mono);
+  color: var(--color-caramel-text);
+  overflow-wrap: anywhere;
+}
+
+.top-match-repo a {
+  color: inherit;
+}
+
+.top-match-title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 4vw, 30px);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.top-match-title a {
+  color: inherit;
+}
+
+.top-match-detail {
+  margin: 0;
+  color: var(--color-caramel-text);
+}
+
+.top-match-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.top-match-labels li {
+  padding: 3px 10px;
+  border: 1px solid var(--color-caramel-line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-caramel-text);
+  overflow-wrap: anywhere;
+}
+
+.top-match .related-posts {
+  margin: 0;
+}
+
+.top-match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.top-match-cta,
+.top-match-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.top-match-cta {
+  padding: 0 18px;
+  background: var(--color-cream);
+  color: var(--color-caramel-dark);
+  font-weight: 600;
+}
+
+.top-match-cta:hover {
+  text-decoration: none;
+}
+
+.top-match-secondary {
+  padding: 0 16px;
+  border: 1px solid var(--color-caramel-line);
+  background: none;
+  color: var(--color-cream);
+  font-weight: 500;
+}
+
+.top-match-secondary:hover {
+  background: var(--color-caramel-dark);
+  text-decoration: none;
+}
+
+/* Text links sit on caramel here, where the page's caramel hover color would disappear. */
+.discover-page .top-match a:not(.top-match-cta):hover {
+  color: var(--color-cream);
+}
+
+.top-match-score {
+  flex: 1 1 260px;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.top-match-score-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.score-ring {
+  flex: none;
+}
+
+.score-ring circle {
+  fill: none;
+  stroke-width: 10;
+}
+
+.score-ring-track {
+  stroke: var(--color-caramel-ring);
+}
+
+.score-ring-arc {
+  stroke: var(--color-cream);
+  stroke-linecap: round;
+}
+
+.score-ring-value {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 600;
+  fill: var(--color-cream);
+}
+
+.top-match-breakdown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.top-match-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.top-match-breakdown dt {
+  color: var(--color-caramel-text);
+}
+
+.top-match-breakdown dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-match-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-caramel-text);
+}
+
 /* ---------- Edit profile drawer ---------- */
 
 .drawer {
@@ -1328,6 +1553,15 @@ html:has(.drawer[open]) {
 
   .hero-title br {
     display: none;
+  }
+
+  .top-match {
+    gap: 24px;
+    padding: 20px;
+  }
+
+  .top-match-score {
+    max-width: none;
   }
 
   .hero-inner {

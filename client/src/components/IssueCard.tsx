@@ -1,14 +1,7 @@
-import type { Issue, ScoreBreakdown } from '../api'
+import type { Issue } from '../api'
 import { LOGIN_URL } from '../api'
-import { formatCount, safeHttpUrl, timeAgo } from '../format'
-
-const BREAKDOWN_LABELS: [keyof ScoreBreakdown, string][] = [
-  ['match', 'Skill match'],
-  ['labels', 'Labels'],
-  ['difficulty', 'Difficulty fit'],
-  ['freshness', 'Freshness'],
-  ['repo', 'Repo quality'],
-]
+import { BREAKDOWN_LABELS, formatCount, timeAgo } from '../format'
+import { RelatedPosts } from './RelatedPosts'
 
 interface Props {
   issue: Issue
@@ -20,11 +13,6 @@ interface Props {
 }
 
 export function IssueCard({ issue, saved = false, onToggleSave, canSignIn = false }: Props) {
-  // Blog links come from untrusted feeds: drop any that aren't http(s) rather than render them.
-  const relatedPosts = issue.relatedPosts.flatMap((post) => {
-    const href = safeHttpUrl(post.url)
-    return href ? [{ post, href }] : []
-  })
   return (
     <article className="card issue-card">
       <div className="issue-main">
@@ -67,21 +55,7 @@ export function IssueCard({ issue, saved = false, onToggleSave, canSignIn = fals
           {issue.assignee && <> · assigned to {issue.assignee}</>}
         </p>
 
-        {relatedPosts.length > 0 && (
-          <div className="related-posts">
-            <span className="related-posts-label">Related reading</span>
-            <ul aria-label="Related blog posts">
-              {relatedPosts.map(({ post, href }) => (
-                <li key={post.id}>
-                  <a href={href} target="_blank" rel="noreferrer">
-                    {post.title}
-                  </a>{' '}
-                  <span className="muted">· {post.company}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <RelatedPosts posts={issue.relatedPosts} />
 
         <div className="issue-actions">
           <a className="btn btn-primary btn-sm" href={issue.url} target="_blank" rel="noreferrer">
