@@ -45,7 +45,7 @@ npm run ingest:blogs                 # server: fetch company engineering-blog fe
   - `crawl.ts`: one query per (label, language). GitHub caps search at **1000 results per query**, so windows over the cap are split recursively by `created:` date.
   - `difficulty.ts`: easy/medium/hard heuristic from labels, comment count, and body length.
   - `mapIssue.ts`: maps a search item to rows. Labels are lowercased and de-duplicated. `language` is the *queried* language, because search results don't include repo language.
-  - `upsert.ts`: multi-row `INSERT ... ON CONFLICT` per page in one transaction (rows are de-duplicated first).
+  - `upsert.ts`: multi-row `INSERT ... ON CONFLICT` per page in one transaction (rows are de-duplicated first). Before the insert, `replaceStaleIds` moves any stored row with the same `(repo_id, number)` but a different id (GitHub re-created the issue) to the new id, moving its `saved_issues` with it, and logs `Replaced stale issue …`.
   - `repoMeta.ts`: caches `stars`, `pushed_at`, `archived` on `repos` via **GraphQL** (`GitHubClient.graphql`; needs a token), 50 aliased `repository(...)` lookups per request (~1 point each), so tens of thousands of repos take minutes instead of hours over REST. NOT_FOUND repos are stored as `archived = true`; other per-repo errors leave `metadata_fetched_at` null so they retry. `buildRepoQuery` / `parseRepoResults` are pure and unit-tested.
   - **Archived repos are skipped everywhere:** the crawl doesn't upsert issues from known-archived repos, and search candidates, saved issues and the sweep all filter `NOT r.archived` (saved issues in archived repos count toward `hiddenClosed`).
 - `src/blogs/`: company engineering blogs (a second content source).
