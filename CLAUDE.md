@@ -1,7 +1,11 @@
-# GitHub Issue Matcher
+# Firstfit
 
 Finds beginner-friendly open-source GitHub issues and ranks them by a user's skills, preferred
 languages, and difficulty level.
+
+The app was renamed from "GitHub Issue Matcher" to **Firstfit**. Use Firstfit in anything users see.
+Infrastructure keeps the old name on purpose (`issuematcher` compose project, images, systemd units,
+`/opt/issuematcher`, the domain, DB names, the repo): don't rename those.
 
 ## Layout
 

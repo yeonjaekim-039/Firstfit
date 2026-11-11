@@ -25,7 +25,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 '◆'
               )}
             </span>{' '}
-            Issue Matcher
+            Firstfit
           </NavLink>
           <nav className="nav">
             <NavLink to="/" end>
