@@ -1,3 +1,13 @@
+import type { ScoreBreakdown } from './api'
+
+export const BREAKDOWN_LABELS: [keyof ScoreBreakdown, string][] = [
+  ['match', 'Skill match'],
+  ['labels', 'Labels'],
+  ['difficulty', 'Difficulty fit'],
+  ['freshness', 'Freshness'],
+  ['repo', 'Repo quality'],
+]
+
 /** 950 -> "950", 1234 -> "1.2k", 45_600 -> "45.6k", 1_200_000 -> "1.2M". */
 export function formatCount(n: number): string {
   const trim = (x: number) => x.toFixed(1).replace(/\.0$/, '')

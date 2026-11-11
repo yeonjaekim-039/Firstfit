@@ -1,4 +1,4 @@
-# GitHub Issue Matcher
+# Firstfit
 
 **Find a good first open-source issue that actually fits you.** Tell it your skills, languages and
 level; it ranks hundreds of thousands of beginner-friendly GitHub issues and explains every score.
