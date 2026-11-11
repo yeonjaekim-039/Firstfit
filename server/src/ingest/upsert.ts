@@ -34,7 +34,41 @@ const errorText = (err: unknown) => {
   return [e.code, e.message, e.detail].filter(Boolean).join(': ');
 };
 
-async function writeRows(client: pg.PoolClient, repos: RepoRow[], issues: IssueRow[]): Promise<void> {
+/** A stored issue whose (repo, number) GitHub now serves under a different id. */
+export interface ReplacedIssue {
+  oldId: number;
+  newId: number;
+}
+
+/**
+ * GitHub sometimes re-creates an issue (same repo and number) under a new id. The insert's
+ * ON CONFLICT (id) can't see that row, so it would fail on UNIQUE (repo_id, number) on every
+ * run. Move the stale row to the new id first; the upsert that follows then refreshes it.
+ * Saved issues are moved in the same statement, so users keep their saves (the FK is checked
+ * at the end of the statement, after both updates).
+ */
+async function replaceStaleIds(
+  client: pg.PoolClient,
+  issues: { id: number; repoId: number | undefined; number: number }[],
+): Promise<ReplacedIssue[]> {
+  const { rows } = await client.query<{ old_id: string; new_id: string }>(
+    `WITH incoming AS (
+       SELECT * FROM unnest($1::int[], $2::int[], $3::bigint[]) AS t(repo_id, number, id)
+     ), stale AS (
+       SELECT i.id AS old_id, t.id AS new_id
+       FROM issues i JOIN incoming t ON i.repo_id = t.repo_id AND i.number = t.number AND i.id <> t.id
+     ), moved_saves AS (
+       UPDATE saved_issues s SET issue_id = stale.new_id FROM stale WHERE s.issue_id = stale.old_id
+     )
+     UPDATE issues i SET id = stale.new_id FROM stale WHERE i.id = stale.old_id
+     RETURNING stale.old_id, stale.new_id`,
+    [issues.map((i) => i.repoId), issues.map((i) => i.number), issues.map((i) => i.id)],
+  );
+  // BIGINT comes back from pg as a string.
+  return rows.map((r) => ({ oldId: Number(r.old_id), newId: Number(r.new_id) }));
+}
+
+async function writeRows(client: pg.PoolClient, repos: RepoRow[], issues: IssueRow[]): Promise<ReplacedIssue[]> {
   const repoParams = repos.flatMap((r) => [r.fullName, r.owner, r.name, r.htmlUrl, r.language]);
   const { rows: repoRows } = await client.query<{ id: number; full_name: string }>(
     `INSERT INTO repos (full_name, owner, name, html_url, language)
@@ -47,9 +81,15 @@ async function writeRows(client: pg.PoolClient, repos: RepoRow[], issues: IssueR
   // RETURNING gives back the stored (cleaned) name, so look rows up by the cleaned name too.
   const repoIds = new Map(repoRows.map((r) => [r.full_name, r.id]));
 
+  const repoIdOf = (iss: IssueRow) => repoIds.get(cleanText(iss.repoFullName));
+  const replaced = await replaceStaleIds(
+    client,
+    issues.map((iss) => ({ id: iss.id, repoId: repoIdOf(iss), number: iss.number })),
+  );
+
   const issueParams = issues.flatMap((iss) => [
     iss.id,
-    repoIds.get(cleanText(iss.repoFullName)),
+    repoIdOf(iss),
     iss.number,
     iss.title,
     iss.url,
@@ -77,17 +117,20 @@ async function writeRows(client: pg.PoolClient, repos: RepoRow[], issues: IssueR
        state = EXCLUDED.state,
        assignee = EXCLUDED.assignee,
        difficulty = EXCLUDED.difficulty,
+       github_created_at = EXCLUDED.github_created_at,
        github_updated_at = EXCLUDED.github_updated_at,
        ingested_at = now()`,
     issueParams,
   );
+  return replaced;
 }
 
-async function inTransaction(client: pg.PoolClient, work: () => Promise<void>): Promise<void> {
+async function inTransaction<T>(client: pg.PoolClient, work: () => Promise<T>): Promise<T> {
   await client.query('BEGIN');
   try {
-    await work();
+    const result = await work();
     await client.query('COMMIT');
+    return result;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -102,7 +145,8 @@ async function inTransaction(client: pg.PoolClient, work: () => Promise<void>): 
  * class 22/23), the page is retried one issue at a time so a single bad row can't drop the
  * other 99: each failing issue is logged with its repo and number, skipped, and the rest are
  * written. Rows are de-duplicated first: Postgres rejects an ON CONFLICT DO UPDATE that
- * touches the same row twice within one statement.
+ * touches the same row twice within one statement. An issue GitHub re-created under a new id
+ * (same repo and number) replaces the stale row instead of failing (see replaceStaleIds).
  */
 export async function upsertBatch(
   pool: Connectable,
@@ -115,10 +159,18 @@ export async function upsertBatch(
   const uniqueRepos = [...repoByName.values()];
   const uniqueIssues = [...new Map(issues.map((i) => [i.id, i])).values()];
 
+  const issueById = new Map(uniqueIssues.map((i) => [i.id, i]));
+  const logReplaced = (replaced: ReplacedIssue[]) => {
+    for (const { oldId, newId } of replaced) {
+      const iss = issueById.get(newId);
+      log(`Replaced stale issue ${iss?.repoFullName}#${iss?.number}: id ${oldId} → ${newId} (re-created on GitHub)`);
+    }
+  };
+
   const client = await pool.connect();
   try {
     try {
-      await inTransaction(client, () => writeRows(client, uniqueRepos, uniqueIssues));
+      logReplaced(await inTransaction(client, () => writeRows(client, uniqueRepos, uniqueIssues)));
       return { upserted: uniqueIssues.length, skipped: 0 };
     } catch (err) {
       if (!isRowDataError(err)) throw err;
@@ -134,7 +186,7 @@ export async function upsertBatch(
         continue;
       }
       try {
-        await inTransaction(client, () => writeRows(client, [repo], [issue]));
+        logReplaced(await inTransaction(client, () => writeRows(client, [repo], [issue])));
         result.upserted++;
       } catch (err) {
         if (!isRowDataError(err)) throw err;

@@ -96,6 +96,7 @@ describe('upsertBatch: one bad row never drops the batch', () => {
     expect(client.sent.map((q) => q.text.trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
       'BEGIN',
       'INSERT INTO repos',
+      'WITH incoming AS',
       'INSERT INTO issues',
       'COMMIT',
     ]);
@@ -113,6 +114,87 @@ describe('upsertBatch: one bad row never drops the batch', () => {
     const { pool, client } = fakeDb();
     await upsertBatch(pool, [repo(), repo()], [issue({ id: 1 }), issue({ id: 1 })], () => {});
     expect(issueInsert(client.sent).values).toHaveLength(14);
+  });
+});
+
+describe('upsertBatch: an issue GitHub re-created under a new id', () => {
+  // Stored as id 501; GitHub now returns the same repo and number as id 9001.
+  const recreated = issue({ id: 9001, number: 1, title: 'Re-created issue' });
+
+  /**
+   * A tiny stand-in for the issues table and its UNIQUE (repo_id, number): the stale-id UPDATE
+   * moves the row, and the INSERT fails with 23505 if any stored row still holds the same
+   * repo and number under another id (exactly the error the crawl used to log every day).
+   */
+  function withStoredIssue() {
+    const db = fakeDb();
+    const stored = new Map<number, { repoId: number; number: number }>([[501, { repoId: 100, number: 1 }]]);
+    let snapshot = new Map(stored);
+    db.client.respond = (text, values) => {
+      if (text === 'BEGIN') snapshot = new Map(stored);
+      if (text === 'ROLLBACK') {
+        stored.clear();
+        snapshot.forEach((row, id) => stored.set(id, row));
+      }
+      if (!text.includes('WITH incoming AS')) return undefined;
+      const [repoIds, numbers, ids] = values as number[][];
+      const rows: { old_id: string; new_id: string }[] = [];
+      ids!.forEach((id, k) => {
+        for (const [oldId, row] of stored) {
+          if (oldId !== id && row.repoId === repoIds![k] && row.number === numbers![k]) {
+            stored.delete(oldId);
+            stored.set(id, row);
+            rows.push({ old_id: String(oldId), new_id: String(id) });
+          }
+        }
+      });
+      return { rows };
+    };
+    db.client.fail = (text, values) => {
+      if (!text.includes('INSERT INTO issues')) return undefined;
+      const [id, repoId, number] = values as number[];
+      for (const [storedId, row] of stored) {
+        if (storedId !== id && row.repoId === repoId && row.number === number) {
+          return pgError('23505', 'duplicate key value violates unique constraint "issues_repo_id_number_key"');
+        }
+      }
+      return undefined;
+    };
+    return { ...db, stored };
+  }
+
+  it('replaces the stale row instead of skipping the issue', async () => {
+    const { pool, client, stored } = withStoredIssue();
+    const log = vi.fn();
+
+    const result = await upsertBatch(pool, [repo()], [recreated], log);
+
+    expect(result).toEqual({ upserted: 1, skipped: 0 });
+    expect([...stored.keys()]).toEqual([9001]);
+    expect(log).toHaveBeenCalledExactlyOnceWith('Replaced stale issue acme/app#1: id 501 → 9001 (re-created on GitHub)');
+    // The stale row is moved before the insert, in the same transaction, matched on (repo_id, number).
+    const texts = client.sent.map((q) => q.text.trim().split(/\s+/).slice(0, 3).join(' '));
+    expect(texts).toEqual(['BEGIN', 'INSERT INTO repos', 'WITH incoming AS', 'INSERT INTO issues', 'COMMIT']);
+    expect(client.sent[2]!.values).toEqual([[100], [1], [9001]]);
+    // Saved issues move with it rather than being cascade-deleted.
+    expect(client.sent[2]!.text).toMatch(/UPDATE saved_issues s SET issue_id = stale\.new_id/);
+    expect(client.sent[2]!.text).not.toMatch(/DELETE/);
+  });
+
+  it('also replaces it when the page fell back to row-by-row writes', async () => {
+    const { pool, client, stored } = withStoredIssue();
+    const bad = issue({ id: 2 });
+    const failBad = client.fail;
+    client.fail = (text, values) =>
+      text.includes('INSERT INTO issues') && values.includes(2) ? pgError('22021', 'invalid byte') : failBad(text, values);
+    const log = vi.fn();
+
+    const result = await upsertBatch(pool, [repo()], [recreated, bad], log);
+
+    expect(result).toEqual({ upserted: 1, skipped: 1 });
+    expect(stored.has(9001)).toBe(true);
+    expect(log).toHaveBeenCalledWith('Replaced stale issue acme/app#1: id 501 → 9001 (re-created on GitHub)');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Skipped issue acme/app#2 (id 2): 22021'));
   });
 });
 
